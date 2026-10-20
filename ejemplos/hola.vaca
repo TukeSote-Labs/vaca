@@ -1,0 +1,18 @@
+# Primer programa en Vaca
+# Ejecuta: vaca ejemplos/hola.vaca
+
+nombre = "Mundo"
+edad = 3
+
+imprimir("=== Vaca ===")
+imprimir(a"Hola, {nombre}!")
+imprimir(a"Tengo {edad} años y sé calcular: {2 + 3 * 4}")
+
+frutas = ["manzana", "pera", "uva"]
+para fruta en frutas {
+    imprimir(a"Fruta: {fruta}")
+}
+
+persona = {"nombre": "Ana", "edad": 30}
+persona.set("ciudad", "Madrid")
+imprimir(a"{persona.get(\"nombre\")} vive en {persona.get(\"ciudad\")}")

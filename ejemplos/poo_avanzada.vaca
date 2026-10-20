@@ -1,0 +1,99 @@
+# POO avanzada: contratos, herencia, observadores y estrategia.
+# Ejecuta: vaca ejemplos/poo_avanzada.vaca
+
+clase Observador {
+    fn notificar(canal, mensaje) {
+        lanzar "Todo observador debe implementar notificar(canal, mensaje)"
+    }
+}
+
+clase Consola(Observador) {
+    fn iniciar(prefijo = "INFO") {
+        este.prefijo = prefijo
+    }
+
+    fn notificar(canal, mensaje) {
+        imprimir(a"[{este.prefijo}] {canal}: {mensaje}")
+    }
+}
+
+clase Contador(Observador) {
+    fn iniciar() {
+        este.total = 0
+    }
+
+    fn notificar(canal, mensaje) {
+        este.total = este.total + 1
+        imprimir(a"Contador de {canal}: {este.total} notificación(es)")
+    }
+}
+
+clase Canal {
+    fn iniciar(nombre) {
+        este.nombre = nombre
+        este.suscriptores = []
+    }
+
+    fn suscribir(observador) {
+        este.suscriptores.agregar(observador)
+    }
+
+    fn publicar(mensaje) {
+        para observador en este.suscriptores {
+            observador.notificar(este.nombre, mensaje)
+        }
+    }
+}
+
+# Patrón Strategy con inyección de dependencias.
+clase MetodoPago {
+    fn pagar(monto) {
+        lanzar "Todo método de pago debe implementar pagar(monto)"
+    }
+}
+
+clase PagoStripe(MetodoPago) {
+    fn pagar(monto) {
+        retornar a"Stripe cobró {monto} €"
+    }
+}
+
+clase PagoPaypal(MetodoPago) {
+    fn pagar(monto) {
+        retornar a"PayPal cobró {monto} €"
+    }
+}
+
+clase Tienda {
+    fn iniciar(metodo_pago) {
+        este.metodo_pago = metodo_pago
+        este.ventas = 0
+    }
+
+    fn comprar(monto) {
+        este.ventas = este.ventas + 1
+        retornar este.metodo_pago.pagar(monto)
+    }
+}
+
+# Observer
+canal = nuevo Canal("noticias")
+canal.suscribir(nuevo Consola("LOG"))
+canal.suscribir(nuevo Contador())
+canal.publicar("Vaca 0.1 disponible")
+canal.publicar("Nuevo módulo HTTP")
+
+# Strategy
+tienda_stripe = nuevo Tienda(nuevo PagoStripe())
+tienda_paypal = nuevo Tienda(nuevo PagoPaypal())
+imprimir(tienda_stripe.comprar(49.9))
+imprimir(tienda_paypal.comprar(19.5))
+imprimir("Ventas con Stripe:", tienda_stripe.ventas)
+
+# Contrato abstracto
+intentar {
+    base = nuevo Observador()
+    base.notificar("x", "y")
+} atrapar error {
+    imprimir(a"Error esperado: {error}")
+}

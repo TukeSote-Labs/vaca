@@ -1,0 +1,38 @@
+# Análisis de datos con DataFrames.
+# Ejecuta desde la raíz: vaca ejemplos/datos.vaca
+
+importar datos
+
+ventas = datos.leer_csv("ventas.csv")
+imprimir("Dimensiones:", datos.dimensiones(ventas))
+imprimir("Columnas:", datos.nombres(ventas))
+
+datos.ver(ventas)
+
+mayores = datos.filtrar(ventas, "monto", ">=", 150)
+imprimir("\nVentas de 150 o más:")
+datos.ver(mayores)
+
+ordenadas = datos.ordenar(ventas, "monto", falso)
+imprimir("\nOrdenadas por monto (descendente):")
+datos.ver(ordenadas)
+
+con_iva = datos.mutar(ventas, "monto_iva", fn(fila) {
+    retornar fila.monto * 1.21
+})
+imprimir("\nCon IVA:")
+datos.ver(datos.seleccionar(con_iva, ["ciudad", "monto", "monto_iva"]))
+
+por_ciudad = datos.agrupar_resumir(ventas, "ciudad", "monto", "suma")
+imprimir("\nTotal por ciudad:")
+datos.ver(por_ciudad)
+
+promedio_por_vendedor = datos.agrupar_resumir(ventas, "vendedor", "monto", "promedio")
+imprimir("\nPromedio por vendedor:")
+datos.ver(promedio_por_vendedor)
+
+# Los DataFrames son diccionarios con "columnas" y "filas",
+# por lo que se pueden serializar o transformar como cualquier valor.
+json_ventas = datos.a_json(mayores)
+imprimir("\nJSON de las ventas filtradas:")
+imprimir(json_ventas)

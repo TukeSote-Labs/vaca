@@ -1,0 +1,34 @@
+[Unit]
+Description=Servicio Vaca
+Documentation=file:///opt/vaca/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vaca
+Group=vaca
+WorkingDirectory=/opt/vaca
+ExecStart=/usr/local/bin/vaca /opt/vaca/app.vaca
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=10s
+
+# Entorno
+Environment=APP_ENV=production
+# EnvironmentFile=-/etc/vaca.env
+
+# Endurecimiento básico
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# El servicio solo puede escribir en su carpeta de datos.
+ReadWritePaths=/opt/vaca/data
+
+[Install]
+WantedBy=multi-user.target

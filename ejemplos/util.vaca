@@ -1,0 +1,19 @@
+# Módulo de ejemplo importable desde otro archivo.
+
+constante VERSION = "1.0.0"
+
+fn saludar(nombre) {
+    retornar a"Hola, {nombre}"
+}
+
+fn sumar_lista(lista) {
+    retornar lista.suma()
+}
+
+fn crear_usuario(nombre, rol = "lector") {
+    retornar {
+        "nombre": nombre,
+        "rol": rol,
+        "activo": verdadero
+    }
+}

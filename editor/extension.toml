@@ -1,0 +1,14 @@
+id = "vaca"
+name = "Vaca"
+version = "0.1.0"
+schema_version = 1
+description = "Soporte del lenguaje Vaca: resaltado, outline, plegado e indentación."
+authors = ["Vaca contributors"]
+languages = ["languages/vaca"]
+capabilities = []
+
+[lib]
+
+[grammars.vaca]
+repository = "file:///home/keso/Escritorio/aguila/editor/tree-sitter-vaca"
+rev = "a4645ea984548476a8ed0511889326fc7617230b"

@@ -1,0 +1,56 @@
+# Manejo de errores y excepciones.
+# Ejecuta: vaca ejemplos/errores.vaca
+
+fn dividir(a, b) {
+    si b == 0 {
+        lanzar {
+            "codigo": "DIV_CERO",
+            "mensaje": "No se puede dividir entre cero"
+        }
+    }
+    retornar a / b
+}
+
+imprimir("=== Excepciones estructuradas ===")
+intentar {
+    imprimir(a"10 / 2 = {dividir(10, 2)}")
+    imprimir(dividir(1, 0))
+} atrapar error {
+    imprimir(a"Error {error.codigo}: {error.mensaje}")
+}
+
+imprimir("\n=== Errores de ejecución ===")
+intentar {
+    imprimir(variable_inexistente)
+} atrapar error {
+    imprimir(a"Capturado: {error}")
+}
+
+intentar {
+    lista = [1, 2, 3]
+    imprimir(lista[10])
+} atrapar error {
+    imprimir(a"Capturado: {error}")
+}
+
+imprimir("\n=== Afirmaciones ===")
+fn validar_edad(edad) {
+    afirmar(edad >= 18, "La edad debe ser al menos 18")
+    retornar "válida"
+}
+
+intentar {
+    imprimir(validar_edad(15))
+} atrapar error {
+    imprimir(a"Validación fallida: {error}")
+}
+
+imprimir("\n=== error() y atrapar sin variable ===")
+intentar {
+    error("Esto es un error personalizado")
+} atrapar {
+    imprimir("Se capturó el error personalizado")
+}
+
+imprimir("\n=== La ejecución continúa ===")
+imprimir("Fin del ejemplo")

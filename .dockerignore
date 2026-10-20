@@ -1,0 +1,11 @@
+target/
+dist/
+.git/
+.gitignore
+editor/tree-sitter-vaca/.git/
+editor/tree-sitter-vaca/node_modules/
+editor/tree-sitter-vaca/.bun-cache/
+editor/tree-sitter-vaca/.cache/
+editor/tree-sitter-vaca/.config/
+**/*.rs.bk
+.vaca_cache

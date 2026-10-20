@@ -1,0 +1,45 @@
+//! Módulos nativos de Vaca.
+
+pub mod archivo;
+pub mod cadenas;
+pub mod datos;
+pub mod http;
+pub mod json;
+pub mod mate;
+pub mod sistema;
+pub mod tiempo;
+
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use crate::value::{Modulo, NativaFn, Value};
+
+pub fn nativa(nombre: &str, min: usize, max: usize, funcion: NativaFn) -> Value {
+    Value::nativa(nombre, min, max, funcion)
+}
+
+pub fn crear_modulo(nombre: &str, miembros: Vec<(&str, Value)>) -> Value {
+    let mut mapa = HashMap::new();
+    for (clave, valor) in miembros {
+        mapa.insert(clave.to_string(), valor);
+    }
+    Value::Modulo(Rc::new(Modulo {
+        nombre: nombre.to_string(),
+        miembros: mapa,
+    }))
+}
+
+/// Devuelve un módulo nativo por nombre, o `None` si no existe.
+pub fn obtener_modulo(nombre: &str) -> Option<Value> {
+    match nombre {
+        "json" => Some(json::modulo()),
+        "mate" | "matematica" | "matemática" => Some(mate::modulo()),
+        "tiempo" => Some(tiempo::modulo()),
+        "sistema" => Some(sistema::modulo()),
+        "archivo" | "fs" => Some(archivo::modulo()),
+        "datos" => Some(datos::modulo()),
+        "http" => Some(http::modulo()),
+        "cadenas" | "texto" => Some(cadenas::modulo()),
+        _ => None,
+    }
+}

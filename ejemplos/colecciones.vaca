@@ -1,0 +1,62 @@
+# Listas, diccionarios y funciones de orden superior.
+# Ejecuta: vaca ejemplos/colecciones.vaca
+
+importar mate
+
+productos = [
+    {"nombre": "Teclado", "precio": 30, "stock": 5},
+    {"nombre": "Monitor", "precio": 180, "stock": 2},
+    {"nombre": "Ratón", "precio": 20, "stock": 10},
+    {"nombre": "Webcam", "precio": 60, "stock": 3}
+]
+
+nombres = productos.mapear(fn(p) { retornar p.nombre })
+imprimir("Productos:", nombres)
+
+disponibles = productos.filtrar(fn(p) { retornar p.stock >= 3 })
+imprimir("Con stock suficiente:", disponibles.mapear(fn(p) { retornar p.nombre }))
+
+valor_inventario = productos.reducir(fn(total, p) {
+    retornar total + p.precio * p.stock
+}, 0)
+imprimir("Valor del inventario:", valor_inventario)
+
+precios = productos.mapear(fn(p) { retornar p.precio })
+imprimir("Precio total:", precios.suma())
+imprimir("Precio promedio:", precios.promedio())
+imprimir("Precio máximo:", mate.maximo(precios))
+
+# Ordenar una copia sin modificar la lista original.
+por_precio = productos.copiar()
+por_precio.ordenar(fn(a, b) { retornar b.precio - a.precio })
+imprimir("Más caro primero:", por_precio.mapear(fn(p) { retornar p.nombre }))
+imprimir("El original sigue igual:", productos.mapear(fn(p) { retornar p.nombre }))
+
+# Diccionario de inventario.
+inventario = {}
+para producto en productos {
+    inventario.set(producto.nombre, producto.stock)
+}
+imprimir("Inventario:", inventario)
+imprimir("Claves:", inventario.llaves())
+imprimir("Valores:", inventario.valores())
+imprimir("Pares:", inventario.items())
+
+# Búsqueda y utilidades de listas.
+monitor = productos.buscar(fn(p) { retornar p.nombre == "Monitor" })
+imprimir("Encontrado:", monitor)
+
+numeros = [5, 1, 3, 2, 4]
+numeros.ordenar()
+imprimir("Ordenados:", numeros)
+numeros.invertir()
+imprimir("Invertidos:", numeros)
+imprimir("Rebanada:", numeros.sublista(1, 4))
+imprimir("Unión:", numeros.unir([9, 8]))
+imprimir("¿Contiene 3?", numeros.contiene(3))
+imprimir("Posición de 3:", numeros.indice_de(3))
+imprimir("Como texto:", numeros.unir_texto(" - "))
+
+# map sobre un rango.
+cuadrados = rango(1, 6).mapear(fn(n) { retornar n * n })
+imprimir("Cuadrados:", cuadrados)

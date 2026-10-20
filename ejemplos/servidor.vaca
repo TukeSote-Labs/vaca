@@ -1,0 +1,67 @@
+# Servidor HTTP escrito en Vaca.
+# Ejecuta: vaca ejemplos/servidor.vaca
+# Prueba:  curl http://localhost:8080/salud
+#         curl "http://localhost:8080/usuarios?nombre=Ana"
+#         curl -X POST -d '{"hola":"mundo"}' http://localhost:8080/eco
+
+importar http
+importar json
+importar tiempo
+
+solicitudes = 0
+
+fn manejador(peticion) {
+    solicitudes = solicitudes + 1
+
+    si peticion.metodo == "GET" y peticion.ruta == "/" {
+        retornar {
+            "estado": 200,
+            "tipo": "text/html; charset=utf-8",
+            "cuerpo": "<h1>Servidor Vaca</h1><p>Funcionando.</p>"
+        }
+    }
+
+    si peticion.metodo == "GET" y peticion.ruta == "/salud" {
+        retornar {
+            "cuerpo": {
+                "estado": "ok",
+                "solicitudes": solicitudes,
+                "hora": tiempo.fecha_iso()
+            }
+        }
+    }
+
+    si peticion.metodo == "GET" y peticion.ruta == "/usuarios" {
+        nombre = peticion.consulta.get("nombre", "invitado")
+        retornar {
+            "cuerpo": {
+                "usuario": nombre,
+                "ip": peticion.ip
+            }
+        }
+    }
+
+    si peticion.metodo == "POST" y peticion.ruta == "/eco" {
+        intentar {
+            cuerpo = json.parse(peticion.cuerpo)
+            retornar {
+                "estado": 201,
+                "cuerpo": {"recibido": cuerpo}
+            }
+        } atrapar error {
+            retornar {
+                "estado": 400,
+                "cuerpo": {"error": a"JSON inválido: {error}"}
+            }
+        }
+    }
+
+    retornar {
+        "estado": 404,
+        "cuerpo": {"error": "ruta no encontrada", "ruta": peticion.ruta}
+    }
+}
+
+imprimir("Servidor Vaca en http://localhost:8080")
+imprimir("Pulsa Ctrl+C para detenerlo.")
+http.servidor(8080, manejador)

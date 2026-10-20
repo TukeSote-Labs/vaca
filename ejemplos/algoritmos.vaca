@@ -1,0 +1,89 @@
+# Algoritmos clásicos escritos en Vaca.
+# Ejecuta: vaca ejemplos/algoritmos.vaca
+
+fn dos_suma(numeros, objetivo) {
+    vistos = {}
+    para i = 0 hasta numeros.longitud() - 1 {
+        falta = objetivo - numeros[i]
+        si vistos.existe(falta) {
+            retornar [vistos.get(falta), i]
+        }
+        vistos.set(numeros[i], i)
+    }
+    retornar nulo
+}
+
+fn busqueda_binaria(ordenados, objetivo) {
+    izquierda = 0
+    derecha = ordenados.longitud() - 1
+    mientras izquierda <= derecha {
+        medio = entero((izquierda + derecha) / 2)
+        si ordenados[medio] == objetivo { retornar medio }
+        si ordenados[medio] < objetivo {
+            izquierda = medio + 1
+        } sino {
+            derecha = medio - 1
+        }
+    }
+    retornar -1
+}
+
+fn fibonacci(n, memo = nulo) {
+    si memo == nulo { memo = {} }
+    si memo.existe(n) { retornar memo.get(n) }
+    si n <= 1 { retornar n }
+    resultado = fibonacci(n - 1, memo) + fibonacci(n - 2, memo)
+    memo.set(n, resultado)
+    retornar resultado
+}
+
+fn parentesis_balanceados(texto) {
+    pila = []
+    pares = {")": "(", "]": "[", "}": "{"}
+    para c en texto.caracteres() {
+        si c == "(" o c == "[" o c == "{" {
+            pila.agregar(c)
+            continuar
+        }
+        si pares.existe(c) {
+            si pila.longitud() == 0 { retornar falso }
+            si pila.pop() != pares.get(c) { retornar falso }
+        }
+    }
+    retornar pila.longitud() == 0
+}
+
+fn merge_ordenar(lista) {
+    si lista.longitud() <= 1 { retornar lista.copiar() }
+    medio = entero(lista.longitud() / 2)
+    izquierda = merge_ordenar(lista.sublista(0, medio))
+    derecha = merge_ordenar(lista.sublista(medio, lista.longitud()))
+    resultado = []
+    i = 0
+    j = 0
+    mientras i < izquierda.longitud() y j < derecha.longitud() {
+        si izquierda[i] <= derecha[j] {
+            resultado.agregar(izquierda[i])
+            i = i + 1
+        } sino {
+            resultado.agregar(derecha[j])
+            j = j + 1
+        }
+    }
+    mientras i < izquierda.longitud() {
+        resultado.agregar(izquierda[i])
+        i = i + 1
+    }
+    mientras j < derecha.longitud() {
+        resultado.agregar(derecha[j])
+        j = j + 1
+    }
+    retornar resultado
+}
+
+imprimir("Two Sum:", dos_suma([2, 7, 11, 15], 9))
+imprimir("Búsqueda binaria:", busqueda_binaria([1, 3, 5, 7, 9, 11], 7))
+imprimir("Fibonacci(20):", fibonacci(20))
+imprimir("Paréntesis:", parentesis_balanceados("{[()]}"))
+imprimir("Paréntesis:", parentesis_balanceados("([)]"))
+imprimir("Merge sort:", merge_ordenar([5, 2, 9, 1, 5, 6]))

@@ -1,0 +1,52 @@
+# Texto, Unicode y conversiones.
+# Ejecuta: vaca ejemplos/texto.vaca
+
+frase = "  Vaca es un lenguaje ligero, en español y para servidores.  "
+limpia = frase.recortar()
+
+imprimir("Original:", a"[{frase}]")
+imprimir("Recortada:", a"[{limpia}]")
+imprimir("Longitud:", limpia.longitud())
+imprimir("Mayúsculas:", limpia.mayusculas())
+imprimir("Minúsculas:", limpia.minusculas())
+imprimir("Reemplazo:", limpia.reemplazar("ligero", "rápido"))
+imprimir("Invertida:", limpia.invertir())
+imprimir("Subtexto:", limpia.subtexto(0, 15))
+imprimir("Repetida:", "Vaca ".repetir(3))
+
+imprimir("\n=== Búsquedas ===")
+imprimir("¿Empieza por Vaca?", limpia.empieza_con("Vaca"))
+imprimir("¿Termina en punto?", limpia.termina_con("."))
+imprimir("¿Contiene 'español'?", limpia.contiene("español"))
+imprimir("Posición de 'lenguaje':", limpia.indice_de("lenguaje"))
+
+imprimir("\n=== Palabras ===")
+palabras = limpia.dividir(" ")
+imprimir("Palabras:", palabras)
+imprimir("Cantidad:", palabras.longitud())
+imprimir("Unidas con guiones:", palabras.unir_texto("-"))
+
+vocales = 0
+para caracter en limpia.minusculas().caracteres() {
+    si "aeiouáéíóú".contiene(caracter) {
+        vocales = vocales + 1
+    }
+}
+imprimir("Vocales:", vocales)
+
+imprimir("\n=== Líneas y CSV ===")
+lineas = "uno\ndos\ntres".separar_lineas()
+imprimir("Líneas:", lineas)
+campos = "Ana,30,Madrid".dividir(",")
+imprimir("Campos:", campos)
+imprimir("Unión:", campos.unir_texto(" | "))
+
+imprimir("\n=== Unicode ===")
+imprimir("Longitud de áéíóú:", "áéíóú".longitud())
+imprimir("Caracteres:", "Vaca".caracteres())
+
+imprimir("\n=== Conversiones ===")
+imprimir("42 + 8 =", "42".a_entero() + 8)
+imprimir("3.5 * 2 =", "3.5".a_decimal() * 2)
+imprimir("verdadero ->", "verdadero".a_logico())
+imprimir("texto(99) ->", texto(99))

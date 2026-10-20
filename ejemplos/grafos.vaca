@@ -1,0 +1,135 @@
+# Grafos: BFS, DFS, camino mínimo sin pesos y orden topológico.
+# Ejecuta: vaca ejemplos/grafos.vaca
+
+grafo = {
+    "A": ["B", "C"],
+    "B": ["D", "E"],
+    "C": ["F"],
+    "D": [],
+    "E": ["F"],
+    "F": []
+}
+
+fn bfs(grafo, inicio) {
+    cola = [inicio]
+    visitados = {}
+    orden = []
+    mientras cola.longitud() > 0 {
+        nodo = cola.eliminar(0)
+        si visitados.existe(nodo) { continuar }
+        visitados.set(nodo, verdadero)
+        orden.agregar(nodo)
+        para vecino en grafo.get(nodo, []) {
+            si no visitados.existe(vecino) {
+                cola.agregar(vecino)
+            }
+        }
+    }
+    retornar orden
+}
+
+fn dfs(grafo, nodo, visitados, orden) {
+    si visitados.existe(nodo) { retornar }
+    visitados.set(nodo, verdadero)
+    orden.agregar(nodo)
+    para vecino en grafo.get(nodo, []) {
+        dfs(grafo, vecino, visitados, orden)
+    }
+}
+
+fn camino(grafo, inicio, fin) {
+    cola = [inicio]
+    padres = {}
+    padres.set(inicio, nulo)
+
+    mientras cola.longitud() > 0 {
+        nodo = cola.eliminar(0)
+        si nodo == fin { romper }
+        para vecino en grafo.get(nodo, []) {
+            si no padres.existe(vecino) {
+                padres.set(vecino, nodo)
+                cola.agregar(vecino)
+            }
+        }
+    }
+
+    si no padres.existe(fin) { retornar nulo }
+
+    resultado = []
+    actual = fin
+    mientras actual != nulo {
+        resultado.agregar(actual)
+        actual = padres.get(actual)
+    }
+    resultado.invertir()
+    retornar resultado
+}
+
+fn orden_topologico(grafo) {
+    grados = {}
+    para nodo en grafo.llaves() {
+        grados.set(nodo, 0)
+    }
+    para nodo en grafo.llaves() {
+        para vecino en grafo.get(nodo, []) {
+            grados.set(vecino, grados.get(vecino, 0) + 1)
+        }
+    }
+
+    cola = []
+    para nodo en grafo.llaves() {
+        si grados.get(nodo) == 0 {
+            cola.agregar(nodo)
+        }
+    }
+
+    orden = []
+    mientras cola.longitud() > 0 {
+        nodo = cola.eliminar(0)
+        orden.agregar(nodo)
+        para vecino en grafo.get(nodo, []) {
+            grados.set(vecino, grados.get(vecino) - 1)
+            si grados.get(vecino) == 0 {
+                cola.agregar(vecino)
+            }
+        }
+    }
+
+    si orden.longitud() != grados.longitud() {
+        retornar nulo
+    }
+    # Las aristas van de un nodo a sus dependencias, así que invertimos
+    # para obtener primero las dependencias y después los dependientes.
+    orden.invertir()
+    retornar orden
+}
+
+imprimir("BFS desde A:", bfs(grafo, "A"))
+
+visitados = {}
+orden_dfs = []
+dfs(grafo, "A", visitados, orden_dfs)
+imprimir("DFS desde A:", orden_dfs)
+
+imprimir("Camino A -> F:", camino(grafo, "A", "F"))
+imprimir("Camino B -> F:", camino(grafo, "B", "F"))
+imprimir("Camino F -> A:", camino(grafo, "F", "A"))
+
+# DAG para orden topológico.
+dependencias = {
+    "base": [],
+    "parser": ["base"],
+    "interprete": ["parser"],
+    "http": ["interprete"],
+    "datos": ["interprete"],
+    "servidor": ["http", "datos"]
+}
+imprimir("Orden topológico:", orden_topologico(dependencias))
+
+# Grafo con ciclo: no hay orden topológico.
+ciclo = {
+    "A": ["B"],
+    "B": ["C"],
+    "C": ["A"]
+}
+imprimir("Ciclo:", orden_topologico(ciclo))

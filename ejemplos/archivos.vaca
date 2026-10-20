@@ -1,0 +1,32 @@
+# Lectura y escritura de archivos.
+# Ejecuta: vaca ejemplos/archivos.vaca
+
+importar archivo
+
+ruta = "ejemplo_temporal.txt"
+
+archivo.escribir(ruta, "primera línea\n")
+archivo.anexar(ruta, "segunda línea\n")
+archivo.anexar(ruta, "tercera línea\n")
+
+imprimir("¿Existe?", archivo.existe(ruta))
+imprimir("Tamaño en bytes:", archivo.tamano(ruta))
+
+contenido = archivo.leer(ruta)
+imprimir("\nContenido:")
+imprimir(contenido)
+
+imprimir("Líneas:", contenido.separar_lineas())
+
+directorio = "temporal_vaca"
+archivo.crear_dir(directorio)
+archivo.escribir(a"{directorio}/nota.txt", "hola desde Vaca")
+imprimir("\nArchivos del directorio:", archivo.listar(directorio))
+imprimir("Contenido de la nota:", archivo.leer(a"{directorio}/nota.txt"))
+imprimir("¿La carpeta de ejemplos contiene ventas.csv?", archivo.listar().contiene("ventas.csv"))
+
+archivo.eliminar(ruta)
+archivo.eliminar(directorio)
+
+imprimir("\n¿Existe el archivo temporal?", archivo.existe(ruta))
+imprimir("¿Existe el directorio temporal?", archivo.existe(directorio))

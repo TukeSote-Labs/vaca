@@ -1,0 +1,106 @@
+# Programación orientada a objetos en Vaca.
+# Ejecuta: vaca ejemplos/poo.vaca
+
+clase Figura {
+    fn iniciar(nombre) {
+        este.nombre = nombre
+    }
+
+    fn area() {
+        lanzar a"La figura '{este.nombre}' debe implementar area()"
+    }
+
+    fn describir() {
+        retornar a"{este.nombre}: área = {este.area()}"
+    }
+}
+
+clase Rectangulo(Figura) {
+    fn iniciar(ancho, alto) {
+        este.nombre = "rectángulo"
+        este.ancho = ancho
+        este.alto = alto
+    }
+
+    fn area() {
+        retornar este.ancho * este.alto
+    }
+}
+
+clase Circulo(Figura) {
+    fn iniciar(radio) {
+        este.nombre = "círculo"
+        este.radio = radio
+    }
+
+    fn area() {
+        importar mate
+        retornar mate.redondear(mate.PI * este.radio * este.radio, 2)
+    }
+}
+
+# Inyección de dependencias: el procesador recibe el método de pago.
+clase PagoStripe {
+    fn pagar(monto) {
+        retornar a"Stripe cobró {monto} €"
+    }
+}
+
+clase PagoPaypal {
+    fn pagar(monto) {
+        retornar a"PayPal cobró {monto} €"
+    }
+}
+
+clase Procesador {
+    fn iniciar(metodo_pago) {
+        este.metodo_pago = metodo_pago
+    }
+
+    fn cobrar(monto) {
+        retornar este.metodo_pago.pagar(monto)
+    }
+}
+
+clase Carrito {
+    fn iniciar() {
+        este.items = []
+    }
+
+    fn agregar(nombre, precio) {
+        este.items.agregar({"nombre": nombre, "precio": precio})
+    }
+
+    fn total() {
+        total = 0
+        para item en este.items {
+            total = total + item.precio
+        }
+        retornar total
+    }
+
+    fn total_con_iva() {
+        retornar este.total() * 1.21
+    }
+}
+
+figuras = [nuevo Rectangulo(4, 5), nuevo Circulo(3)]
+para figura en figuras {
+    imprimir(figura.describir())
+}
+
+procesador = nuevo Procesador(nuevo PagoStripe())
+imprimir(procesador.cobrar(49.9))
+
+carrito = nuevo Carrito()
+carrito.agregar("teclado", 30)
+carrito.agregar("ratón", 20)
+imprimir(a"Total: {carrito.total()} € | con IVA: {carrito.total_con_iva()} €")
+
+# Abstracción: una figura base no se puede usar directamente.
+base = nuevo Figura("genérica")
+intentar {
+    base.area()
+} atrapar error {
+    imprimir(a"Error esperado: {error}")
+}

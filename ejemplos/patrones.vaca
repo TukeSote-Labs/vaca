@@ -1,0 +1,128 @@
+# Patrones de diseño para servidores.
+# Ejecuta: vaca ejemplos/patrones.vaca
+
+# --- Singleton ---
+instancia_db = nulo
+
+fn obtener_db() {
+    si instancia_db == nulo {
+        instancia_db = {"conexiones": 0}
+        imprimir("Base de datos inicializada")
+    }
+    instancia_db.conexiones = instancia_db.conexiones + 1
+    retornar instancia_db
+}
+
+db1 = obtener_db()
+db2 = obtener_db()
+imprimir("¿Misma instancia?", db1 == db2)
+imprimir("Conexiones:", db1.conexiones)
+
+# --- Middleware ---
+fn middleware_trazas(peticion, siguiente) {
+    peticion.cabeceras.set("x-traza", "abc123")
+    imprimir(a"Middleware trazas: {peticion.ruta}")
+    retornar siguiente(peticion)
+}
+
+fn middleware_auth(peticion, siguiente) {
+    si peticion.cabeceras.get("authorization") == nulo {
+        retornar {"estado": 401, "error": "falta authorization"}
+    }
+    imprimir("Middleware auth: OK")
+    retornar siguiente(peticion)
+}
+
+fn manejador_final(peticion) {
+    retornar {
+        "estado": 200,
+        "datos": {"ruta": peticion.ruta},
+        "cabeceras": peticion.cabeceras
+    }
+}
+
+fn ejecutar_cadena(peticion) {
+    retornar middleware_trazas(peticion, fn(p) {
+        retornar middleware_auth(p, manejador_final)
+    })
+}
+
+peticion_sin_auth = {"ruta": "/privado", "cabeceras": {}}
+imprimir("Sin auth:", ejecutar_cadena(peticion_sin_auth))
+
+peticion_con_auth = {
+    "ruta": "/privado",
+    "cabeceras": {"authorization": "Bearer token"}
+}
+imprimir("Con auth:", ejecutar_cadena(peticion_con_auth))
+
+# --- Cola de tareas FIFO ---
+cola_tareas = []
+
+fn encolar(tarea) {
+    cola_tareas.agregar(tarea)
+}
+
+fn procesar_siguiente() {
+    si cola_tareas.longitud() == 0 {
+        retornar nulo
+    }
+    retornar cola_tareas.eliminar(0)
+}
+
+encolar("enviar correo")
+encolar("generar informe")
+encolar("limpiar caché")
+
+mientras cola_tareas.longitud() > 0 {
+    imprimir("Procesando:", procesar_siguiente())
+}
+
+# --- Caché de datos ---
+cache = {}
+
+fn calcular_costoso(n) {
+    total = 0
+    para i = 1 hasta n {
+        total = total + i
+    }
+    retornar total
+}
+
+fn obtener_resultado(n) {
+    si cache.existe(n) {
+        imprimir(a"Cache hit para {n}")
+        retornar cache.get(n)
+    }
+    resultado = calcular_costoso(n)
+    cache.set(n, resultado)
+    imprimir(a"Calculado y cacheado para {n}")
+    retornar resultado
+}
+
+imprimir(obtener_resultado(100))
+imprimir(obtener_resultado(100))
+imprimir(obtener_resultado(200))
+
+# --- Rate limiter con reloj simulado ---
+fn crear_limitador(maximo, ventana) {
+    registros = {}
+    retornar fn(usuario, instante) {
+        registro = registros.get(usuario, {"inicio": instante, "cuenta": 0})
+        si instante - registro.inicio >= ventana {
+            registro.inicio = instante
+            registro.cuenta = 0
+        }
+        registro.cuenta = registro.cuenta + 1
+        registros.set(usuario, registro)
+        retornar registro.cuenta <= maximo
+    }
+}
+
+limitar = crear_limitador(3, 10)
+imprimir("Petición 1:", limitar("ana", 0))
+imprimir("Petición 2:", limitar("ana", 1))
+imprimir("Petición 3:", limitar("ana", 2))
+imprimir("Petición 4:", limitar("ana", 3))
+imprimir("Otra ventana:", limitar("ana", 11))
+imprimir("Otro usuario:", limitar("luis", 11))

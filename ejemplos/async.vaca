@@ -1,0 +1,30 @@
+# Sintaxis async/await de Vaca.
+# Ejecuta: vaca ejemplos/async.vaca
+#
+# Nota: en la implementación actual la ejecución es síncrona; `esperar`
+# evalúa la tarea en el mismo hilo. La sintaxis está preparada para un
+# runtime asíncrono futuro.
+
+importar tiempo
+
+async fn consultar(nombre, milisegundos) {
+    imprimir(a"Iniciando consulta {nombre}")
+    esperar tiempo.dormir(milisegundos)
+    imprimir(a"Consulta {nombre} terminada")
+    retornar {"nombre": nombre, "latencia": milisegundos}
+}
+
+async fn principal() {
+    primera = esperar consultar("A", 20)
+    segunda = esperar consultar("B", 10)
+    retornar [primera, segunda]
+}
+
+resultado = esperar principal()
+imprimir("Resultado:", resultado)
+
+tarea = async fn() {
+    esperar tiempo.dormir(5)
+    retornar 42
+}
+imprimir("Tarea anónima:", esperar tarea())

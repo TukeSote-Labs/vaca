@@ -1,0 +1,80 @@
+# Closures, callbacks y funciones que devuelven funciones.
+# Ejecuta: vaca ejemplos/closures.vaca
+
+fn crear_contador(inicio = 0) {
+    valor = inicio
+    retornar {
+        "incrementar": fn(cantidad = 1) {
+            valor = valor + cantidad
+            retornar valor
+        },
+        "actual": fn() { retornar valor },
+        "reiniciar": fn() {
+            valor = 0
+            retornar valor
+        }
+    }
+}
+
+contador = crear_contador(10)
+imprimir("Inicial:", contador.actual())
+imprimir("+1:", contador.incrementar())
+imprimir("+5:", contador.incrementar(5))
+imprimir("Actual:", contador.actual())
+imprimir("Reiniciado:", contador.reiniciar())
+
+# Los closures conservan su propio estado.
+otro = crear_contador(100)
+imprimir("Otro contador:", otro.incrementar())
+imprimir("Primer contador:", contador.incrementar())
+
+# Composición de funciones.
+fn componer(f, g) {
+    retornar fn(x) { retornar f(g(x)) }
+}
+
+doble = fn(x) { retornar x * 2 }
+mas_uno = fn(x) { retornar x + 1 }
+doble_y_suma = componer(doble, mas_uno)
+imprimir("Composición (5 + 1) * 2 =", doble_y_suma(5))
+
+# Funciones que capturan un parámetro.
+fn multiplicador(factor) {
+    retornar fn(x) { retornar x * factor }
+}
+
+triple = multiplicador(3)
+imprimir("Mapear con closure:", [1, 2, 3, 4].mapear(triple))
+
+# Memoización.
+fn memoizar(original) {
+    cache = {}
+    retornar fn(n) {
+        si cache.existe(n) {
+            retornar cache.get(n)
+        }
+        resultado = original(n)
+        cache.set(n, resultado)
+        retornar resultado
+    }
+}
+
+fn lenta(n) {
+    total = 0
+    para i = 1 hasta 100000 {
+        total = total + i
+    }
+    retornar n + total
+}
+
+rapida = memoizar(lenta)
+imprimir("Primera llamada:", rapida(5))
+imprimir("Segunda llamada (caché):", rapida(5))
+imprimir("Otra entrada:", rapida(7))
+
+# Callback con acumulador.
+fn aplicar_dos_veces(accion, valor) {
+    retornar accion(accion(valor))
+}
+
+imprimir("Dos veces +10:", aplicar_dos_veces(fn(x) { retornar x + 10 }, 5))

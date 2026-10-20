@@ -1,0 +1,10 @@
+# Importación de un módulo escrito en Vaca.
+# Ejecuta: vaca ejemplos/importar.vaca
+
+importar "util.vaca" como util
+
+imprimir(util.saludar("Vaca"))
+imprimir("Versión del módulo:", util.VERSION)
+imprimir("Suma:", util.sumar_lista([1, 2, 3, 4]))
+usuario = util.crear_usuario("Ana", "admin")
+imprimir(usuario)
