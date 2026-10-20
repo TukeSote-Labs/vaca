@@ -161,6 +161,7 @@ http.servidor(8080, fn(peticion) {
 | Error | Solución |
 | :--- | :--- |
 | `variables declaradas pero nunca usadas` | Usa la variable, elimínala o usa `_` |
+| `las constantes ... deben escribirse en MAYÚSCULAS` | Renombra la constante: `constante LIMITE` |
 | `la variable 'x' no está definida` | Revisa el nombre o el ámbito |
 | `índice N fuera de rango` | Comprueba la longitud antes de acceder |
 | `la función 'f' espera N argumento(s)` | Ajusta la llamada o los valores por defecto |

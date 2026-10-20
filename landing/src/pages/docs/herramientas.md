@@ -188,6 +188,7 @@ python3 scripts/probar_concurrencia.py
 | Mensaje | Causa | Solución |
 | :--- | :--- | :--- |
 | `variables declaradas pero nunca usadas` | Variable local sin leer | Úsala, elimínala o renómbrala con `_` |
+| `las constantes ... MAYÚSCULAS` | Nombre de constante con minúsculas | Escríbelo todo en MAYÚSCULAS |
 | `error de sintaxis en la línea N, columna M` | Llave, paréntesis o token inesperado | Revisa la línea indicada |
 | `error léxico en la línea N, columna M` | Texto sin cerrar, carácter inválido | Revisa comillas y escapes |
 

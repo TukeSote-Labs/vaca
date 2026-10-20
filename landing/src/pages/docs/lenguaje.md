@@ -47,12 +47,16 @@ pendiente: Texto
 imprimir(pendiente)   # nulo
 ```
 
-Las **constantes** se declaran con `constante` y no se pueden reasignar:
+Las **constantes** se declaran con `constante` y no se pueden reasignar. Su
+nombre debe ir en **MAYÚSCULAS**; el analizador rechaza cualquier nombre con
+minúsculas:
 
 ```vaca
 constante LIMITE = 100
+constante AÑO = 2026
 
 # Esto falla:
+# constante Limite = 100
 # LIMITE = 200
 ```
 
@@ -618,8 +622,8 @@ importar "util.vaca" como util
 
 - Las llaves son obligatorias para los bloques.
 - El punto y coma es opcional.
-- Se recomienda `constante` para valores que no cambian y nombres en
-  `MAYÚSCULAS` por convención.
+- Las constantes son inmutables y su nombre debe ir en `MAYÚSCULAS`; el
+  analizador lo comprueba antes de ejecutar.
 - El analizador rechaza variables locales declaradas y nunca usadas. Usa `_`
   para descartar un valor o un nombre que empiece por `_` para silenciar la
   comprobación.

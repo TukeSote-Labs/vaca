@@ -121,6 +121,8 @@ Ada
 - Los bloques `bash` contienen comandos de shell.
 - Los bloques `text` contienen la salida esperada.
 - `#`, `//` y `/* ... */` son comentarios en Vaca.
+- Las constantes se declaran con `constante` y su nombre debe ir en
+  **MAYÚSCULAS**.
 - El punto y coma `;` nunca es obligatorio.
 
 > **Nota:** Vaca comprueba antes de ejecutar que no haya variables locales

@@ -15,7 +15,7 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 53 pruebas automatizadas y ejemplos ejecutables.
+- 57 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** intérprete de árbol funcional con análisis semántico previo de
 > variables locales no usadas y concurrencia real basada en hilos. No usa
@@ -270,7 +270,7 @@ revisión que usa la extensión de Zed. Consulta
 // También es un comentario
 
 nombre = "Mundo"          # variable dinámica
-constante LIMITE = 10     # constante inmutable
+constante LIMITE = 10     # inmutable; nombre en MAYÚSCULAS
 edad: Entero = 3          # anotación de tipo opcional
 
 imprimir("Hola,", nombre)
@@ -279,6 +279,19 @@ imprimir(a"{nombre} tiene {edad} años y 2+2={2 + 2}")
 
 El punto y coma `;` es **opcional**: puedes usarlo si quieres separar
 sentencias, pero nunca es obligatorio.
+
+### Nombres de constantes
+
+Las constantes se declaran con `constante` y son inmutables. Su nombre debe ir
+en **MAYÚSCULAS**; el analizador rechaza cualquier nombre con minúsculas:
+
+```vaca
+constante LIMITE = 10
+constante AÑO = 2026
+
+# error de compilación:
+# constante Limite = 10
+```
 
 ### Comprobación de variables no usadas
 

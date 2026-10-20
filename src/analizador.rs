@@ -39,6 +39,7 @@ struct Ambito {
 struct Analizador {
     ambitos: Vec<Ambito>,
     errores: Vec<String>,
+    errores_constantes: Vec<String>,
 }
 
 impl Analizador {
@@ -61,19 +62,36 @@ impl Analizador {
         Analizador {
             ambitos: vec![global],
             errores: Vec::new(),
+            errores_constantes: Vec::new(),
         }
     }
 
     fn resultado(mut self) -> Result<(), Error> {
-        if self.errores.is_empty() {
-            return Ok(());
+        let mut mensajes = Vec::new();
+
+        if !self.errores_constantes.is_empty() {
+            self.errores_constantes.sort();
+            self.errores_constantes.dedup();
+            mensajes.push(format!(
+                "las constantes son inmutables y deben escribirse en MAYÚSCULAS: {}",
+                self.errores_constantes.join(", ")
+            ));
         }
-        self.errores.sort();
-        self.errores.dedup();
-        Err(Error::Semantico(format!(
-            "variables declaradas pero nunca usadas: {}",
-            self.errores.join(", ")
-        )))
+
+        if !self.errores.is_empty() {
+            self.errores.sort();
+            self.errores.dedup();
+            mensajes.push(format!(
+                "variables declaradas pero nunca usadas: {}",
+                self.errores.join(", ")
+            ));
+        }
+
+        if mensajes.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Semantico(mensajes.join("; ")))
+        }
     }
 
     fn programa(&mut self, programa: &[Stmt]) {
@@ -91,7 +109,12 @@ impl Analizador {
         match stmt {
             Stmt::Expresion(expr) => self.expr(expr),
             Stmt::Asignar { objetivo, valor } => self.asignacion(objetivo, valor),
-            Stmt::Constante { valor, .. } => self.expr(valor),
+            Stmt::Constante { nombre, valor } => {
+                if nombre.chars().any(|c| c.is_lowercase()) {
+                    self.errores_constantes.push(format!("'{}'", nombre));
+                }
+                self.expr(valor);
+            }
             Stmt::Si {
                 condicion,
                 entonces,

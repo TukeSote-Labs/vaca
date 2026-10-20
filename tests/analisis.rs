@@ -301,3 +301,55 @@ fn el_repl_recuerda_globales_entre_ejecuciones() {
         .unwrap();
     assert_eq!(interprete.tomar_salida(), "2\n");
 }
+
+#[test]
+fn constante_en_minusculas_es_error() {
+    let mensaje = mensaje_error(
+        r#"
+        fn f() {
+            constante limite = 10
+            retornar limite
+        }
+        imprimir(f())
+        "#,
+    );
+    assert!(mensaje.contains("MAYÚSCULAS"), "mensaje: {}", mensaje);
+    assert!(mensaje.contains("'limite'"), "mensaje: {}", mensaje);
+}
+
+#[test]
+fn constante_mixta_es_error() {
+    let mensaje = mensaje_error(
+        r#"
+        constante Limite = 10
+        imprimir(Limite)
+        "#,
+    );
+    assert!(mensaje.contains("MAYÚSCULAS"), "mensaje: {}", mensaje);
+    assert!(mensaje.contains("'Limite'"), "mensaje: {}", mensaje);
+}
+
+#[test]
+fn constante_en_mayusculas_compila() {
+    let salida = ejecutar_fuente(
+        r#"
+        constante LIMITE = 10
+        constante AÑO = 2026
+        imprimir(LIMITE + AÑO)
+        "#,
+    )
+    .unwrap();
+    assert_eq!(salida, "2036\n");
+}
+
+#[test]
+fn constante_con_acento_minuscula_es_error() {
+    let mensaje = mensaje_error(
+        r#"
+        constante año = 2026
+        imprimir(año)
+        "#,
+    );
+    assert!(mensaje.contains("MAYÚSCULAS"), "mensaje: {}", mensaje);
+    assert!(mensaje.contains("año"), "mensaje: {}", mensaje);
+}
