@@ -15,7 +15,7 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 57 pruebas automatizadas y ejemplos ejecutables.
+- 59 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** intérprete de árbol funcional con análisis semántico previo de
 > variables locales no usadas y concurrencia real basada en hilos. No usa
@@ -207,6 +207,11 @@ vaca ast <archivo>         # muestra el AST
 vaca --version
 vaca --ayuda
 ```
+
+La versión que muestra `vaca --version` incluye metadatos del último commit:
+`0.1.0+<commits>.<hash>`. Por ejemplo, `0.1.0+4.0b78e95` significa versión
+semántica `0.1.0`, 4 commits y el commit `0b78e95`. `vaca --ayuda` muestra un
+banner estilo cowsay con esa misma versión.
 
 ### Comprobar un programa antes de ejecutarlo
 

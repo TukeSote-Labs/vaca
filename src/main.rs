@@ -11,6 +11,10 @@ use vaca::parser::Parser;
 use vaca::value::Value;
 use vaca::{Error, Interprete};
 
+/// Versión base de Cargo más los metadatos del último commit.
+const VERSION: &str = env!("VACA_VERSION");
+const TAGLINE: &str = "Vaca: Lenguaje en español para servidores";
+
 fn main() -> ExitCode {
     let argumentos: Vec<String> = env::args().skip(1).collect();
     let codigo = match argumentos.first().map(|s| s.as_str()) {
@@ -19,7 +23,7 @@ fn main() -> ExitCode {
             0
         }
         Some("-v") | Some("--version") | Some("version") => {
-            println!("Vaca {}", env!("CARGO_PKG_VERSION"));
+            println!("Vaca {}", VERSION);
             0
         }
         Some("repl") => match repl() {
@@ -53,21 +57,43 @@ fn main() -> ExitCode {
 }
 
 fn ayuda() {
+    print!("{}", banner());
+    println!();
     println!(
-        "Vaca {}\n\
-         Lenguaje de programación en español, orientado a servidores.\n\n\
-         USO:\n\
-             vaca <archivo.vaca>        Ejecuta un programa\n\
-             vaca run <archivo.vaca>    Ejecuta un programa\n\
-             vaca repl                  Abre la consola interactiva\n\
-             vaca tokens <archivo>      Muestra los tokens del archivo\n\
-             vaca ast <archivo>         Muestra el árbol de sintaxis\n\
-             vaca --version             Muestra la versión\n\
-             vaca --ayuda               Muestra esta ayuda\n\n\
-         EJEMPLO:\n\
-             vaca ejemplos/hola.vaca",
-        env!("CARGO_PKG_VERSION")
+        "USO:
+    vaca <archivo.vaca>        Ejecuta un programa
+    vaca run <archivo.vaca>    Ejecuta un programa
+    vaca repl                  Abre la consola interactiva
+    vaca tokens <archivo>      Muestra los tokens del archivo
+    vaca ast <archivo>         Muestra el árbol de sintaxis
+    vaca --version             Muestra la versión
+    vaca --ayuda               Muestra esta ayuda
+
+EJEMPLO:
+    vaca ejemplos/hola.vaca"
     );
+}
+
+/// Banner estilo cowsay con la versión del build.
+fn banner() -> String {
+    let version = format!("VERSION = {}", VERSION);
+    let ancho = TAGLINE.chars().count().max(version.chars().count());
+    let mut texto = String::new();
+
+    texto.push_str(&format!(" {}\n", "_".repeat(ancho + 2)));
+    texto.push_str(&format!("/ {:<ancho$} \\\n", TAGLINE, ancho = ancho));
+    texto.push_str(&format!("\\ {:<ancho$} /\n", version, ancho = ancho));
+    texto.push_str(&format!(" {}\n", "-".repeat(ancho + 2)));
+    texto.push_str(
+        r"        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+",
+    );
+
+    texto
 }
 
 fn ejecutar(ruta: &str, extra: &[String]) -> u8 {
@@ -141,7 +167,7 @@ fn mostrar_ast(ruta: &str) -> u8 {
 }
 
 fn repl() -> Result<(), u8> {
-    println!("Vaca {} — consola interactiva", env!("CARGO_PKG_VERSION"));
+    println!("Vaca {} — consola interactiva", VERSION);
     println!("Escribe 'salir' para terminar.\n");
     let mut interprete = Interprete::nuevo();
     interprete.max_profundidad = 256;

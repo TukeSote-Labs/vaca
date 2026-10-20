@@ -15,8 +15,12 @@ vaca repl                  # consola interactiva
 vaca tokens <archivo>      # volcado de tokens
 vaca ast <archivo>         # volcado del AST
 vaca --version             # versión
-vaca --ayuda               # ayuda
+vaca --ayuda               # ayuda + banner cowsay
 ```
+
+La versión incluye metadatos del último commit: `0.1.0+4.0b78e95` significa
+versión semántica `0.1.0`, 4 commits y el hash corto `0b78e95`. Si el binario
+se compila sin `.git`, muestra solo la versión de `Cargo.toml`.
 
 Los argumentos que van después del archivo quedan disponibles en
 `sistema.argumentos()`:
