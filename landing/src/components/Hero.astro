@@ -1,0 +1,387 @@
+---
+import Codigo from "./Codigo.astro";
+import Ventana from "./Ventana.astro";
+
+const snippet = `
+importar http
+importar json
+importar concurrencia
+
+peticiones = concurrencia.contador(0)
+
+fn manejador(peticion) {
+    total = peticiones.incrementar()
+
+    si peticion.ruta == "/salud" {
+        retornar {"cuerpo": {
+            "estado": "ok",
+            "peticiones": total
+        }}
+    }
+
+    si peticion.metodo == "POST" y peticion.ruta == "/eco" {
+        datos = json.parse(peticion.cuerpo)
+        retornar {"estado": 201,
+                  "cuerpo": {"recibido": datos}}
+    }
+
+    retornar {"estado": 404,
+              "cuerpo": {"error": "no encontrada"}}
+}
+
+http.servidor(8080, manejador, 1000)
+`;
+---
+
+<section class="hero" id="inicio">
+    <div class="contenedor rejilla">
+        <div class="texto">
+            <p class="distintivo">
+                <span class="punto" aria-hidden="true"></span>
+                v0.1.0 · 53 pruebas · MIT
+            </p>
+
+            <h1>
+                El backend
+                <br />
+                también se escribe
+                <br />
+                <span class="marca-texto">en español.</span>
+            </h1>
+
+            <p class="entrada">
+                Vaca es un lenguaje de servidores con un motor en Rust y cero
+                dependencias externas. Llaves, punto y coma opcional, análisis
+                de variables no usadas y concurrencia real. Para una API, un
+                pipeline de datos o un laboratorio de estrés.
+            </p>
+
+            <div class="acciones">
+                <a class="btn btn-primario" href="#instalar">
+                    Empezar en 2 minutos
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                        <path
+                            d="M4 10h11M11 5l5 5-5 5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="square"
+                            stroke-linejoin="miter"
+                        ></path>
+                    </svg>
+                </a>
+                <a class="btn btn-secundario" href="/docs/">
+                    Leer la documentación
+                </a>
+            </div>
+
+            <p class="nota">
+                Tus programas no necesitan Node ni npm: un binario y tus
+                archivos
+                <code>.vaca</code>.
+            </p>
+
+            <div class="sellos" aria-hidden="true">
+                <span class="sello sello-rosa">0 dependencias</span>
+                <span class="sello sello-cian">53 pruebas</span>
+                <span class="sello sello-lima">fase 10 completa</span>
+            </div>
+        </div>
+
+        <div class="codigo-hero">
+            <span class="sticker">servidor concurrente</span>
+            <Ventana titulo="servidor.vaca">
+                <Fragment slot="acciones">
+                    <span class="estado-vivo">
+                        <i aria-hidden="true"></i> :8080
+                    </span>
+                </Fragment>
+                <Codigo codigo={snippet} />
+            </Ventana>
+            <p class="pie-codigo">
+                Sin frameworks. Sin dependencias. Sin ceremonia.
+            </p>
+        </div>
+    </div>
+
+    <dl class="contenedor ficha">
+        <div>
+            <dt>Paradigma</dt>
+            <dd>Multiparadigma</dd>
+        </div>
+        <div>
+            <dt>Tipado</dt>
+            <dd>Dinámico + opcional</dd>
+        </div>
+        <div>
+            <dt>Motor</dt>
+            <dd>Intérprete en Rust</dd>
+        </div>
+        <div>
+            <dt>Dependencias</dt>
+            <dd>Cero</dd>
+        </div>
+    </dl>
+</section>
+
+<style>
+    .hero {
+        position: relative;
+        overflow-x: clip;
+        padding-top: clamp(3rem, 7vw, 5.5rem);
+        background: var(--papel);
+    }
+
+    .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(
+            rgba(10, 10, 10, 0.16) 1.2px,
+            transparent 1.2px
+        );
+        background-size: 22px 22px;
+        -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 68%);
+        mask-image: linear-gradient(90deg, transparent 30%, #000 68%);
+        pointer-events: none;
+    }
+
+    .rejilla {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+        gap: clamp(2rem, 5vw, 4.5rem);
+        align-items: center;
+    }
+
+    .distintivo {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.32rem 0.65rem;
+        border: var(--borde);
+        background: var(--amarillo);
+        box-shadow: 3px 3px 0 var(--tinta);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        transform: rotate(-1.5deg);
+    }
+
+    .punto {
+        width: 0.5rem;
+        height: 0.5rem;
+        border: 2px solid var(--tinta);
+        background: var(--rosa);
+    }
+
+    h1 {
+        margin-top: 1.35rem;
+        font-size: clamp(2.2rem, 4.6vw, 3.4rem);
+        line-height: 0.95;
+    }
+
+    .marca-texto {
+        display: inline-block;
+        margin-top: 0.2rem;
+        padding: 0 0.1em 0.04em;
+        border: var(--borde);
+        background: var(--amarillo);
+        box-shadow: 6px 6px 0 var(--tinta);
+        line-height: 0.92;
+    }
+
+    .entrada {
+        max-width: 54ch;
+        margin-top: 1.5rem;
+        color: var(--tinta);
+        font-size: clamp(1rem, 1.3vw, 1.08rem);
+        line-height: 1.6;
+    }
+
+    .acciones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+        margin-top: 2rem;
+    }
+
+    .nota {
+        margin-top: 1.3rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--tinta);
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .nota code {
+        padding: 0.08rem 0.28rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+        font-size: 0.76rem;
+    }
+
+    .sellos {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 1.6rem;
+    }
+
+    .sello {
+        padding: 0.25rem 0.55rem;
+        border: 2px solid var(--tinta);
+        box-shadow: 3px 3px 0 var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .sello-rosa {
+        background: var(--rosa);
+        transform: rotate(-2deg);
+    }
+
+    .sello-cian {
+        background: var(--cian);
+        transform: rotate(1.5deg);
+    }
+
+    .sello-lima {
+        background: var(--lima);
+        transform: rotate(-1deg);
+    }
+
+    .codigo-hero {
+        position: relative;
+    }
+
+    .sticker {
+        position: absolute;
+        top: -1rem;
+        left: 1rem;
+        z-index: 3;
+        padding: 0.3rem 0.6rem;
+        border: 3px solid var(--tinta);
+        background: var(--rosa);
+        box-shadow: 4px 4px 0 var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        transform: rotate(2deg);
+    }
+
+    .codigo-hero :global(.ventana) {
+        box-shadow: 10px 10px 0 var(--tinta);
+        transform: rotate(-1deg);
+        transition: transform 0.2s ease;
+    }
+
+    .codigo-hero:hover :global(.ventana) {
+        transform: rotate(0deg);
+    }
+
+    .estado-vivo {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        font-weight: 700;
+    }
+
+    .estado-vivo i {
+        width: 0.45rem;
+        height: 0.45rem;
+        border: 2px solid var(--tinta);
+        background: var(--lima);
+    }
+
+    .pie-codigo {
+        margin-top: 1rem;
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-align: right;
+    }
+
+    .ficha {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 3px;
+        margin-top: clamp(3rem, 6vw, 5rem);
+        border: var(--borde);
+        background: var(--tinta);
+        box-shadow: var(--sombra);
+    }
+
+    .ficha > div {
+        padding: 1rem 1.1rem 1.05rem;
+        background: var(--blanco);
+    }
+
+    .ficha > div:nth-child(1) {
+        background: var(--amarillo);
+    }
+
+    .ficha > div:nth-child(2) {
+        background: var(--rosa);
+    }
+
+    .ficha > div:nth-child(3) {
+        background: var(--cian);
+    }
+
+    .ficha > div:nth-child(4) {
+        background: var(--lima);
+    }
+
+    dt {
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    dd {
+        margin: 0.25rem 0 0;
+        font-family: var(--display);
+        font-size: 1rem;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        text-transform: uppercase;
+    }
+
+    @media (max-width: 980px) {
+        .rejilla {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .codigo-hero {
+            max-width: 42rem;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .ficha {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .pie-codigo {
+            text-align: left;
+        }
+    }
+</style>

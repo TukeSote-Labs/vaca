@@ -31,6 +31,8 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 | Extensión para Zed | [`editor/README.md`](editor/README.md) |
 | Empaquetado, Docker y systemd | [`packaging/README.md`](packaging/README.md) |
 | Gramática Tree-sitter | [`editor/tree-sitter-vaca/README.md`](editor/tree-sitter-vaca/README.md) |
+| Landing del lenguaje | [`landing/README.md`](landing/README.md) |
+| Documentación web completa | [`landing/src/pages/docs`](landing/src/pages/docs) |
 
 ---
 
@@ -820,6 +822,7 @@ editor/             Extensión de Zed
   languages/vaca/   Configuración y consultas Tree-sitter
   tree-sitter-vaca/ Gramática Tree-sitter (repo Git local)
   actualizar.sh     Actualiza la revisión de la gramática
+landing/            Landing del lenguaje (Astro + Bun)
 ```
 
 ---

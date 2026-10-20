@@ -1,0 +1,322 @@
+---
+import Ventana from "./Ventana.astro";
+
+const comandos = [
+    ["vaca archivo.vaca", "Ejecuta un programa"],
+    ["vaca run archivo.vaca", "Alias explícito de ejecución"],
+    ["vaca repl", "Consola interactiva multilínea"],
+    ["vaca tokens archivo.vaca", "Muestra el flujo de tokens"],
+    ["vaca ast archivo.vaca", "Muestra el árbol de sintaxis"],
+    ["vaca --version", "Versión del intérprete"],
+];
+
+const GITHUB = "https://github.com/ulf-frostypaw/vaca";
+
+// HTML estático: las llaves del código de Vaca no deben interpretarse como
+// expresiones de Astro.
+const repl = `<code><span class="prompt">$</span> vaca repl
+<span class="prompt">vaca&gt;</span> fn doble(n) { retornar n * 2 }
+<span class="prompt">vaca&gt;</span> doble(21)
+<span class="salida">42</span>
+<span class="prompt">vaca&gt;</span> frutas = ["pera", "uva"]
+<span class="prompt">vaca&gt;</span> frutas.agregar("higo")
+<span class="prompt">vaca&gt;</span> frutas
+<span class="salida">["pera", "uva", "higo"]</span></code>`;
+---
+
+<section class="seccion" id="herramientas">
+    <div class="contenedor">
+        <header class="cabecera-seccion">
+            <p class="eyebrow">Herramientas</p>
+            <h2 class="titulo-seccion">El taller completo.</h2>
+            <p class="sub-seccion">
+                Un solo binario con REPL, inspector de tokens, volcado de AST y
+                soporte de editor. Lo justo para trabajar sin montar un
+                ecosistema entero.
+            </p>
+        </header>
+
+        <div class="rejilla">
+            <div class="tabla-envoltura">
+                <table class="cli">
+                    <caption class="sr-only">
+                        Comandos de la CLI de Vaca
+                    </caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Comando</th>
+                            <th scope="col">Qué hace</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {comandos.map(([comando, descripcion]) => (
+                            <tr>
+                                <td>
+                                    <code>{comando}</code>
+                                </td>
+                                <td>{descripcion}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <Ventana titulo="vaca repl">
+                <pre class="terminal" set:html={repl}></pre>
+            </Ventana>
+        </div>
+
+        <div class="tarjetas">
+            <a
+                class="tarjeta"
+                href={`${GITHUB}/tree/main/editor`}
+                target="_blank"
+                rel="noreferrer"
+            >
+                <span class="glifo" aria-hidden="true">
+                    Z
+                </span>
+                <h3>Extensión de Zed</h3>
+                <p>
+                    Gramática Tree-sitter propia: resaltado, plegado, outline y
+                    text objects.
+                </p>
+                <span class="flecha" aria-hidden="true">
+                    ↗
+                </span>
+            </a>
+
+            <a
+                class="tarjeta"
+                href={`${GITHUB}/tree/main/packaging`}
+                target="_blank"
+                rel="noreferrer"
+            >
+                <span class="glifo" aria-hidden="true">
+                    □
+                </span>
+                <h3>Empaquetado</h3>
+                <p>
+                    Tarball con instalador, Docker, unidad systemd y binario
+                    estático musl.
+                </p>
+                <span class="flecha" aria-hidden="true">
+                    ↗
+                </span>
+            </a>
+
+            <a
+                class="tarjeta"
+                href={`${GITHUB}#pruebas`}
+                target="_blank"
+                rel="noreferrer"
+            >
+                <span class="glifo" aria-hidden="true">
+                    ✓
+                </span>
+                <h3>Pruebas</h3>
+                <p>
+                    53 pruebas automatizadas, ejecución de todos los ejemplos y
+                    scripts de carga.
+                </p>
+                <span class="flecha" aria-hidden="true">
+                    ↗
+                </span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<style>
+    .rejilla {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+        gap: clamp(1.5rem, 4vw, 2.5rem);
+        align-items: center;
+    }
+
+    .tabla-envoltura {
+        overflow-x: auto;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+    }
+
+    .cli {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.86rem;
+    }
+
+    .cli th {
+        padding: 0.65rem 0.9rem;
+        border-bottom: 3px solid var(--tinta);
+        background: var(--tinta);
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-align: left;
+        text-transform: uppercase;
+    }
+
+    .cli td {
+        padding: 0.6rem 0.9rem;
+        border-bottom: 2px solid var(--tinta);
+        color: var(--gris-texto);
+        font-size: 0.84rem;
+    }
+
+    .cli tr:last-child td {
+        border-bottom: none;
+    }
+
+    .cli tbody tr {
+        transition: background 0.12s ease;
+    }
+
+    .cli tbody tr:hover {
+        background: var(--amarillo);
+    }
+
+    .cli td:first-child {
+        white-space: nowrap;
+    }
+
+    .cli code {
+        color: var(--tinta);
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .rejilla :global(.ventana) {
+        box-shadow: 8px 8px 0 var(--tinta);
+    }
+
+    .terminal {
+        margin: 0;
+        padding: 1rem 1.1rem 1.2rem;
+        overflow-x: auto;
+        color: #f5f0e3;
+        font-size: 0.78rem;
+        line-height: 1.85;
+    }
+
+    .terminal :global(code) {
+        font: inherit;
+    }
+
+    .terminal :global(.prompt) {
+        color: var(--lima);
+        font-weight: 700;
+    }
+
+    .terminal :global(.salida) {
+        color: var(--cian);
+    }
+
+    .tarjetas {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+
+    .tarjeta {
+        position: relative;
+        padding: 1.15rem 1.2rem 1.25rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+        color: var(--tinta);
+        text-decoration: none;
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .tarjeta:hover {
+        transform: translate(-3px, -3px);
+        box-shadow: 9px 9px 0 var(--tinta);
+    }
+
+    .glifo {
+        display: inline-grid;
+        place-items: center;
+        width: 2.2rem;
+        height: 2.2rem;
+        border: 2px solid var(--tinta);
+        background: var(--amarillo);
+        box-shadow: 2px 2px 0 var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .tarjeta:nth-child(2) .glifo {
+        background: var(--rosa);
+    }
+
+    .tarjeta:nth-child(3) .glifo {
+        background: var(--cian);
+    }
+
+    .tarjeta h3 {
+        margin-top: 0.85rem;
+        font-size: 0.95rem;
+        line-height: 1.15;
+    }
+
+    .tarjeta p {
+        margin-top: 0.45rem;
+        padding-right: 1.4rem;
+        color: var(--gris-texto);
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+
+    .flecha {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        display: grid;
+        place-items: center;
+        width: 1.55rem;
+        height: 1.55rem;
+        border: 2px solid var(--tinta);
+        background: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        font-weight: 700;
+        transition: transform 0.15s ease;
+    }
+
+    .tarjeta:hover .flecha {
+        transform: translate(-2px, 2px);
+    }
+
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    @media (max-width: 980px) {
+        .rejilla {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 760px) {
+        .tarjetas {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+</style>

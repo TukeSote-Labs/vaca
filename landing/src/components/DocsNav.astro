@@ -1,0 +1,110 @@
+---
+const grupos = [
+  {
+    titulo: 'Empezar',
+    enlaces: [
+      ['/docs/', 'Introducción'],
+      ['/docs/lenguaje/', 'El lenguaje'],
+    ],
+  },
+  {
+    titulo: 'Biblioteca',
+    enlaces: [
+      ['/docs/modulos/', 'Módulos nativos'],
+      ['/docs/servidor/', 'HTTP y concurrencia'],
+    ],
+  },
+  {
+    titulo: 'Práctica',
+    enlaces: [
+      ['/docs/ejemplos/', 'Ejemplos de uso'],
+      ['/docs/herramientas/', 'Herramientas'],
+      ['/docs/referencia/', 'Referencia rápida'],
+    ],
+  },
+];
+
+const normalizar = (ruta: string) => (ruta.length > 1 ? ruta.replace(/\/$/, '') : ruta);
+const actual = normalizar(Astro.url.pathname);
+---
+
+<nav class="nav" aria-label="Documentación">
+  {
+    grupos.map((grupo) => (
+      <div class="grupo">
+        <p class="grupo-titulo">{grupo.titulo}</p>
+        <ul>
+          {grupo.enlaces.map(([href, texto]) => {
+            const activo = actual === normalizar(href);
+            return (
+              <li>
+                <a
+                  href={href}
+                  class:list={['enlace', { activo }]}
+                  aria-current={activo ? 'page' : undefined}
+                >
+                  {texto}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    ))
+  }
+</nav>
+
+<style>
+  .nav {
+    display: grid;
+    gap: 1.15rem;
+  }
+
+  .grupo-titulo {
+    margin-bottom: 0.3rem;
+    color: #7c766b;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  ul {
+    display: grid;
+    gap: 0.28rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .enlace {
+    display: block;
+    padding: 0.38rem 0.55rem;
+    border: 2px solid transparent;
+    color: var(--tinta);
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-decoration: none;
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease,
+      box-shadow 0.12s ease,
+      transform 0.12s ease;
+  }
+
+  .enlace:hover {
+    border-color: var(--tinta);
+    background: var(--amarillo);
+    box-shadow: 2px 2px 0 var(--tinta);
+    transform: translate(-1px, -1px);
+  }
+
+  .enlace.activo {
+    border-color: var(--tinta);
+    background: var(--tinta);
+    box-shadow: 2px 2px 0 var(--rosa);
+    color: var(--amarillo);
+  }
+</style>

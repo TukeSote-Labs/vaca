@@ -1,23 +1,326 @@
+---
+interface Props {
+    title?: string;
+    description?: string;
+}
+
+const {
+    title = "Vaca — Un lenguaje de servidores en español",
+    description = "Vaca es un lenguaje de programación en español para backends, datos y pruebas de carga. Motor en Rust, sin dependencias externas, concurrencia real y servidor HTTP incluido.",
+} = Astro.props;
+---
+
 <!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
-	</head>
-	<body>
-		<slot />
-	</body>
+<html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="generator" content={Astro.generator} />
+        <meta name="theme-color" content="#fff8e7" />
+        <meta name="description" content={description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:locale" content="es_ES" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <title>{title}</title>
+    </head>
+    <body>
+        <slot />
+
+        <script>
+            document.addEventListener("click", async (event) => {
+                const objetivo = event.target;
+                if (!(objetivo instanceof Element)) return;
+
+                const boton = objetivo.closest("[data-copiar]");
+                if (!(boton instanceof HTMLElement)) return;
+
+                const id = boton.dataset.copiar;
+                const bloque = id ? document.getElementById(id) : null;
+                const texto = bloque?.textContent ?? "";
+
+                try {
+                    await navigator.clipboard.writeText(texto);
+                } catch {
+                    const area = document.createElement("textarea");
+                    area.value = texto;
+                    area.style.position = "fixed";
+                    area.style.opacity = "0";
+                    document.body.appendChild(area);
+                    area.select();
+                    document.execCommand("copy");
+                    area.remove();
+                }
+
+                const original = boton.textContent;
+                boton.textContent = "Copiado";
+                boton.dataset.copiado = "si";
+                window.setTimeout(() => {
+                    boton.textContent = original;
+                    delete boton.dataset.copiado;
+                }, 1400);
+            });
+        </script>
+    </body>
 </html>
 
-<style>
-	html,
-	body {
-		margin: 0;
-		width: 100%;
-		height: 100%;
-	}
+<style is:global>
+    :root {
+        --tinta: #0a0a0a;
+        --papel: #fff8e7;
+        --blanco: #ffffff;
+        --amarillo: #ffe600;
+        --rosa: #ff90e8;
+        --cian: #00e0ff;
+        --lima: #b8ff3c;
+        --naranja: #ff6b35;
+        --gris: #e9e4d7;
+        --gris-texto: #3f3b34;
+        --borde: 3px solid var(--tinta);
+        --sombra: 6px 6px 0 var(--tinta);
+        --sombra-grande: 10px 10px 0 var(--tinta);
+        --ancho: 1180px;
+        --display:
+            "Archivo Black", "Arial Black", "Helvetica Neue", Arial, system-ui,
+            sans-serif;
+        --sans: "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+        --mono:
+            "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace,
+            SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    }
+
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
+    html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 6rem;
+        background: var(--papel);
+    }
+
+    body {
+        margin: 0;
+        background: var(--papel);
+        color: var(--tinta);
+        font-family: var(--sans);
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+        background: var(--amarillo);
+        color: var(--tinta);
+    }
+
+    a {
+        color: inherit;
+    }
+
+    img,
+    svg {
+        display: block;
+        max-width: 100%;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        margin: 0;
+        font-family: var(--display);
+        font-weight: 900;
+        line-height: 0.95;
+        letter-spacing: -0.04em;
+        text-transform: uppercase;
+        text-wrap: balance;
+    }
+
+    p {
+        margin: 0;
+    }
+
+    code,
+    pre,
+    kbd {
+        font-family: var(--mono);
+    }
+
+    button,
+    input {
+        font: inherit;
+    }
+
+    :focus-visible {
+        outline: 3px solid var(--tinta);
+        outline-offset: 3px;
+    }
+
+    .contenedor {
+        width: min(var(--ancho), calc(100% - 2 * clamp(1rem, 4vw, 2.5rem)));
+        margin-inline: auto;
+    }
+
+    .seccion {
+        padding-block: clamp(3.5rem, 8vw, 6.5rem);
+    }
+
+    .eyebrow {
+        display: inline-block;
+        padding: 0.3rem 0.65rem;
+        border: var(--borde);
+        background: var(--amarillo);
+        box-shadow: 3px 3px 0 var(--tinta);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        transform: rotate(-1.5deg);
+    }
+
+    .titulo-seccion {
+        margin-top: 1.1rem;
+        font-size: clamp(2.2rem, 5vw, 4rem);
+    }
+
+    .sub-seccion {
+        max-width: 64ch;
+        margin-top: 1.1rem;
+        color: var(--tinta);
+        font-size: 1.02rem;
+        font-weight: 500;
+    }
+
+    .cabecera-seccion {
+        margin-bottom: clamp(2rem, 4vw, 3rem);
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.8rem 1.1rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: 5px 5px 0 var(--tinta);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .btn:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 7px 7px 0 var(--tinta);
+    }
+
+    .btn:active {
+        transform: translate(3px, 3px);
+        box-shadow: 2px 2px 0 var(--tinta);
+    }
+
+    .btn-primario {
+        background: var(--amarillo);
+    }
+
+    .btn-secundario {
+        background: var(--blanco);
+    }
+
+    .btn svg {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    .saltar {
+        position: absolute;
+        top: -100px;
+        left: 1rem;
+        z-index: 100;
+        padding: 0.6rem 1rem;
+        border: 3px solid var(--amarillo);
+        background: var(--tinta);
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-decoration: none;
+        text-transform: uppercase;
+    }
+
+    .saltar:focus {
+        top: 0;
+        color: var(--amarillo);
+    }
+
+    /* Código y tokens (globales: el HTML lo inyecta `set:html`). */
+    .codigo {
+        margin: 0;
+        padding: 1.15rem 1.25rem 1.35rem;
+        overflow-x: auto;
+        color: #f5f0e3;
+        font-size: 0.82rem;
+        line-height: 1.7;
+        tab-size: 4;
+    }
+
+    .codigo code {
+        font: inherit;
+    }
+
+    .codigo .tok-kw {
+        color: var(--amarillo);
+    }
+
+    .codigo .tok-cad {
+        color: var(--lima);
+    }
+
+    .codigo .tok-num {
+        color: var(--rosa);
+    }
+
+    .codigo .tok-com {
+        color: #8f8f8f;
+        font-style: italic;
+    }
+
+    .codigo .tok-fn {
+        color: var(--cian);
+    }
+
+    .codigo .tok-id {
+        color: #f5f0e3;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html {
+            scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important;
+        }
+    }
 </style>

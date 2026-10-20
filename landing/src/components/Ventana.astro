@@ -1,0 +1,89 @@
+---
+interface Props {
+    titulo?: string;
+}
+
+const { titulo = "programa.vaca" } = Astro.props;
+---
+
+<figure class="ventana">
+    <div class="barra">
+        <span class="luces" aria-hidden="true">
+            <i></i>
+            <i></i>
+            <i></i>
+        </span>
+        <figcaption>{titulo}</figcaption>
+        <span class="acciones">
+            <slot name="acciones" />
+        </span>
+    </div>
+    <div class="cuerpo">
+        <slot />
+    </div>
+</figure>
+
+<style>
+    .ventana {
+        margin: 0;
+        overflow: hidden;
+        border: 3px solid var(--tinta);
+        background: var(--tinta);
+        box-shadow: var(--sombra);
+    }
+
+    .barra {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.52rem 0.75rem;
+        border-bottom: 3px solid var(--tinta);
+        background: var(--amarillo);
+    }
+
+    .luces {
+        display: flex;
+        gap: 0.35rem;
+    }
+
+    .luces i {
+        width: 0.55rem;
+        height: 0.55rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+    }
+
+    .luces i:nth-child(1) {
+        background: var(--rosa);
+    }
+
+    .luces i:nth-child(2) {
+        background: var(--naranja);
+    }
+
+    .luces i:nth-child(3) {
+        background: var(--lima);
+    }
+
+    figcaption {
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    .acciones {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
+
+    .cuerpo {
+        max-height: 38rem;
+        overflow: auto;
+        background: #0a0a0a;
+    }
+</style>

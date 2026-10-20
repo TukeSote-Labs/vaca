@@ -1,0 +1,174 @@
+---
+import Logo from "./Logo.astro";
+
+const GITHUB = "https://github.com/ulf-frostypaw/vaca";
+---
+
+<footer class="pie">
+    <div class="contenedor">
+        <div class="arriba">
+            <div class="marca">
+                <Logo tamano={42} />
+                <div>
+                    <p class="nombre">Vaca</p>
+                    <p class="lema">Un lenguaje de servidores, en español.</p>
+                </div>
+            </div>
+
+            <nav class="columnas" aria-label="Enlaces del proyecto">
+                <div>
+                    <p class="titulo">Proyecto</p>
+                    <a href={GITHUB} target="_blank" rel="noreferrer">
+                        GitHub
+                    </a>
+                    <a
+                        href={`${GITHUB}#readme`}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        README
+                    </a>
+                    <a
+                        href={`${GITHUB}/tree/main/ejemplos`}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        Ejemplos
+                    </a>
+                </div>
+                <div>
+                    <p class="titulo">Herramientas</p>
+                    <a
+                        href={`${GITHUB}/tree/main/editor`}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        Extensión Zed
+                    </a>
+                    <a
+                        href={`${GITHUB}/tree/main/packaging`}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        Empaquetado
+                    </a>
+                    <a
+                        href={`${GITHUB}/blob/main/packaging/Dockerfile`}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        Docker
+                    </a>
+                </div>
+                <div>
+                    <p class="titulo">Documentación</p>
+                    <a href="/docs/">Manual completo</a>
+                    <a href="/docs/lenguaje/">El lenguaje</a>
+                    <a href="/docs/modulos/">Módulos</a>
+                    <a href="/docs/ejemplos/">Ejemplos</a>
+                    <a href="/#estado">Estado</a>
+                </div>
+            </nav>
+        </div>
+
+        <div class="abajo">
+            <p>MIT · 2026 · Hecho con Rust, hablado en español.</p>
+            <p class="guino">Sin toros, sin dependencias.</p>
+        </div>
+    </div>
+</footer>
+
+<style>
+    .pie {
+        border-top: 6px solid var(--amarillo);
+        background: var(--tinta);
+        color: var(--papel);
+        padding-block: clamp(2.5rem, 5vw, 3.5rem) 1.8rem;
+    }
+
+    .arriba {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: clamp(2rem, 5vw, 4rem);
+    }
+
+    .marca {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+    }
+
+    .nombre {
+        font-family: var(--display);
+        font-size: 1.7rem;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        line-height: 1;
+        text-transform: uppercase;
+    }
+
+    .lema {
+        margin-top: 0.2rem;
+        color: #bdb7aa;
+        font-size: 0.84rem;
+    }
+
+    .columnas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: clamp(2rem, 4vw, 3.5rem);
+    }
+
+    .columnas > div {
+        display: grid;
+        align-content: start;
+        gap: 0.42rem;
+    }
+
+    .titulo {
+        margin-bottom: 0.25rem;
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    .columnas a {
+        color: var(--papel);
+        font-size: 0.82rem;
+        text-decoration: none;
+        transition: color 0.12s ease;
+    }
+
+    .columnas a:hover {
+        color: var(--amarillo);
+        text-decoration: underline;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 0.2em;
+    }
+
+    .abajo {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.6rem;
+        margin-top: clamp(2rem, 4vw, 3rem);
+        padding-top: 1.2rem;
+        border-top: 2px solid #3a3a3a;
+        color: #bdb7aa;
+        font-family: var(--mono);
+        font-size: 0.64rem;
+        font-weight: 600;
+    }
+
+    .guino {
+        color: var(--lima);
+    }
+
+    :focus-visible {
+        outline-color: var(--amarillo);
+    }
+</style>

@@ -1,0 +1,11 @@
+---
+import { resaltar } from '../lib/resaltar';
+
+interface Props {
+  codigo: string;
+}
+
+const { codigo } = Astro.props;
+---
+
+<pre class="codigo"><code set:html={resaltar(codigo.trim())} /></pre>

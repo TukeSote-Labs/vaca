@@ -1,0 +1,365 @@
+---
+import Codigo from "./Codigo.astro";
+import Ventana from "./Ventana.astro";
+
+const snippet = `
+importar tiempo
+
+async fn consultar(nombre, ms) {
+    tiempo.dormir(ms)
+    retornar a"{nombre} lista"
+}
+
+inicio = tiempo.millis()
+
+a = consultar("A", 200)
+b = consultar("B", 200)
+
+resultado_a = esperar a
+resultado_b = esperar b
+
+imprimir(tiempo.millis() - inicio)   # ~200, no 400
+`;
+---
+
+<section class="seccion concurrency" id="concurrencia">
+    <div class="contenedor">
+        <div class="rejilla">
+            <div>
+                <p class="eyebrow">Bajo el capó</p>
+                <h2 class="titulo-seccion">
+                    Concurrencia que
+                    <br />
+                    <span class="resalte">no es de mentira.</span>
+                </h2>
+                <p class="sub-seccion">
+                    Cada <code>async fn</code> arranca un hilo. Cada conexión
+                    HTTP, también. Los contadores atómicos no pierden
+                    incrementos y las tareas se pueden esperar varias veces sin
+                    repetir trabajo.
+                </p>
+
+                <Ventana titulo="paralelo.vaca">
+                    <Fragment slot="acciones">
+                        <span class="sello">hilos reales</span>
+                    </Fragment>
+                    <Codigo codigo={snippet} />
+                </Ventana>
+            </div>
+
+            <aside class="bench">
+                <p class="bench-etiqueta">Prueba de carga</p>
+                <p class="cifra">
+                    43<span>×</span>
+                </p>
+                <p class="cifra-pie">menos tiempo de espera en esta prueba</p>
+
+                <div
+                    class="barras"
+                    role="img"
+                    aria-label="50 peticiones de 200 milisegundos: 10 segundos en serie frente a 0,23 segundos con Vaca"
+                >
+                    <div class="barra">
+                        <div class="meta">
+                            <span>En serie</span>
+                            <span>10,00 s</span>
+                        </div>
+                        <div class="pista">
+                            <div
+                                class="relleno serie"
+                                style="--ancho: 100%"
+                            ></div>
+                        </div>
+                    </div>
+                    <div class="barra">
+                        <div class="meta">
+                            <span>Vaca · 50 hilos</span>
+                            <span>0,23 s</span>
+                        </div>
+                        <div class="pista">
+                            <div class="relleno" style="--ancho: 2.3%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <dl class="detalles">
+                    <div>
+                        <dt>Solicitudes</dt>
+                        <dd>50</dd>
+                    </div>
+                    <div>
+                        <dt>Latencia</dt>
+                        <dd>200 ms</dd>
+                    </div>
+                    <div>
+                        <dt>CPU</dt>
+                        <dd>16 hilos</dd>
+                    </div>
+                </dl>
+
+                <p class="bench-pie">
+                    Medido con <code>scripts/probar_concurrencia.py</code>.
+                </p>
+            </aside>
+        </div>
+
+        <div class="aviso">
+            <span class="aviso-icono" aria-hidden="true">
+                !
+            </span>
+            <p>
+                <strong>Es un modelo de hilos, no un event loop.</strong>
+                Para cargas masivas, limita las conexiones con
+                <code>http.servidor(..., limite)</code> o reparte el tráfico
+                entre varias instancias. Cada conexión reserva 8 MiB de pila
+                virtual.
+            </p>
+        </div>
+    </div>
+</section>
+
+<style>
+    .concurrency {
+        border-block: 6px solid var(--tinta);
+        background: var(--tinta);
+        color: var(--papel);
+    }
+
+    .eyebrow {
+        background: var(--amarillo);
+        box-shadow: 4px 4px 0 var(--papel);
+        color: var(--tinta);
+    }
+
+    .titulo-seccion {
+        color: var(--papel);
+    }
+
+    .resalte {
+        display: inline-block;
+        padding: 0 0.08em;
+        background: var(--cian);
+        box-shadow: 5px 5px 0 var(--amarillo);
+        color: var(--tinta);
+        line-height: 0.92;
+    }
+
+    .sub-seccion {
+        color: #e9e4d7;
+    }
+
+    .sub-seccion code {
+        padding: 0.03em 0.22em;
+        border: 2px solid var(--tinta);
+        background: var(--papel);
+        color: var(--tinta);
+        font-size: 0.86em;
+        font-weight: 700;
+    }
+
+    .rejilla {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+        gap: clamp(2rem, 5vw, 4.5rem);
+        align-items: center;
+    }
+
+    .rejilla :global(.ventana) {
+        margin-top: 1.8rem;
+        border-color: var(--papel);
+        box-shadow: 8px 8px 0 var(--amarillo);
+    }
+
+    .sello {
+        padding: 0.16rem 0.45rem;
+        border: 2px solid var(--tinta);
+        background: var(--tinta);
+        color: var(--lima);
+        font-family: var(--mono);
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .bench {
+        padding: clamp(1.3rem, 3vw, 1.9rem);
+        border: var(--borde);
+        background: var(--papel);
+        box-shadow: 10px 10px 0 var(--rosa);
+        color: var(--tinta);
+    }
+
+    .bench-etiqueta {
+        font-family: var(--mono);
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    .cifra {
+        margin-top: 0.35rem;
+        font-family: var(--display);
+        font-size: clamp(3.8rem, 7vw, 5.4rem);
+        font-weight: 900;
+        letter-spacing: -0.06em;
+        line-height: 0.9;
+    }
+
+    .cifra span {
+        color: var(--rosa);
+        text-shadow: 3px 3px 0 var(--tinta);
+    }
+
+    .cifra-pie {
+        margin-top: 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .barras {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1.6rem;
+    }
+
+    .barra {
+        display: grid;
+        gap: 0.35rem;
+    }
+
+    .meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        font-weight: 700;
+    }
+
+    .pista {
+        height: 1.05rem;
+        overflow: hidden;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+    }
+
+    .relleno {
+        width: max(var(--ancho), 2.2rem);
+        height: 100%;
+        border-right: 2px solid var(--tinta);
+        background: var(--lima);
+    }
+
+    .relleno.serie {
+        background: #bdb7aa;
+    }
+
+    .detalles {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+        margin: 1.6rem 0 0;
+    }
+
+    .detalles div {
+        padding: 0.45rem 0.5rem;
+        border: 2px solid var(--tinta);
+        background: var(--amarillo);
+    }
+
+    .detalles div:nth-child(2) {
+        background: var(--rosa);
+    }
+
+    .detalles div:nth-child(3) {
+        background: var(--cian);
+    }
+
+    dt {
+        font-family: var(--mono);
+        font-size: 0.55rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    dd {
+        margin: 0.15rem 0 0;
+        font-family: var(--display);
+        font-size: 1rem;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+    }
+
+    .bench-pie {
+        margin-top: 1rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .bench-pie code {
+        padding: 0.03rem 0.22rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+        font-size: 0.92em;
+    }
+
+    .aviso {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        margin-top: clamp(2.5rem, 5vw, 4rem);
+        padding: 0.9rem 1rem;
+        border: var(--borde);
+        background: var(--amarillo);
+        box-shadow: 6px 6px 0 var(--rosa);
+        color: var(--tinta);
+    }
+
+    .aviso-icono {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 1.45rem;
+        height: 1.45rem;
+        border: 2px solid var(--tinta);
+        background: var(--tinta);
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .aviso p {
+        font-size: 0.84rem;
+        font-weight: 500;
+    }
+
+    .aviso strong {
+        font-weight: 800;
+    }
+
+    .aviso code {
+        padding: 0.03rem 0.22rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+        font-size: 0.9em;
+        font-weight: 700;
+    }
+
+    :focus-visible {
+        outline-color: var(--amarillo);
+    }
+
+    @media (max-width: 980px) {
+        .rejilla {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .bench {
+            max-width: 34rem;
+        }
+    }
+</style>

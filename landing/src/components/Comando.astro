@@ -1,0 +1,83 @@
+---
+interface Props {
+    id: string;
+    codigo: string;
+}
+
+const { id, codigo } = Astro.props;
+---
+
+<div class="comando">
+    <pre id={id}><code>{codigo}</code></pre>
+    <button
+        type="button"
+        class="copiar"
+        data-copiar={id}
+        aria-label="Copiar comando"
+    >
+        Copiar
+    </button>
+</div>
+
+<style>
+    .comando {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.7rem;
+        padding: 0.65rem 0.65rem 0.65rem 0.85rem;
+        border: 3px solid var(--tinta);
+        border-left: 7px solid var(--amarillo);
+        background: var(--tinta);
+        box-shadow: 4px 4px 0 var(--tinta);
+    }
+
+    pre {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        padding: 0.15rem 0;
+        overflow-x: auto;
+        color: #f5f0e3;
+        font-size: 0.78rem;
+        font-weight: 500;
+        line-height: 1.7;
+        white-space: pre;
+    }
+
+    code {
+        font: inherit;
+    }
+
+    .copiar {
+        flex: none;
+        padding: 0.3rem 0.55rem;
+        border: 2px solid var(--tinta);
+        background: var(--amarillo);
+        box-shadow: 2px 2px 0 var(--papel);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease,
+            background 0.15s ease;
+    }
+
+    .copiar:hover {
+        transform: translate(-1px, -1px);
+        box-shadow: 3px 3px 0 var(--papel);
+    }
+
+    .copiar:active {
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0 var(--papel);
+    }
+
+    .copiar[data-copiado="si"] {
+        background: var(--lima);
+    }
+</style>

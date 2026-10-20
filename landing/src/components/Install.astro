@@ -1,0 +1,261 @@
+---
+import Comando from "./Comando.astro";
+---
+
+<section class="seccion" id="instalar">
+    <div class="contenedor">
+        <header class="cabecera-seccion">
+            <p class="eyebrow">Instalación</p>
+            <h2 class="titulo-seccion">
+                De cero a servidor
+                <br />
+                en tres comandos.
+            </h2>
+            <p class="sub-seccion">
+                Sin instaladores exóticos ni un runtime que aprender. Rust
+                estable,
+                <code>cargo build --release</code> y un binario que puedes
+                copiar a cualquier servidor.
+            </p>
+        </header>
+
+        <div class="rejilla">
+            <ol class="pasos">
+                <li class="paso">
+                    <div class="paso-cabecera">
+                        <span class="numero" aria-hidden="true">
+                            01
+                        </span>
+                        <div>
+                            <h3>Clona y compila</h3>
+                            <p>
+                                El proyecto no tiene dependencias externas:
+                                compila sin red.
+                            </p>
+                        </div>
+                    </div>
+                    <Comando
+                        id="cmd-1"
+                        codigo={`git clone https://github.com/ulf-frostypaw/vaca.git
+cd vaca
+cargo build --release`}
+                    />
+                </li>
+
+                <li class="paso">
+                    <div class="paso-cabecera">
+                        <span class="numero" aria-hidden="true">
+                            02
+                        </span>
+                        <div>
+                            <h3>Ejecuta tu primer programa</h3>
+                            <p>
+                                Los ejemplos cubren el lenguaje, la stdlib, los
+                                datos y los servidores.
+                            </p>
+                        </div>
+                    </div>
+                    <Comando
+                        id="cmd-2"
+                        codigo={"./target/release/vaca ejemplos/hola.vaca"}
+                    />
+                </li>
+
+                <li class="paso">
+                    <div class="paso-cabecera">
+                        <span class="numero" aria-hidden="true">
+                            03
+                        </span>
+                        <div>
+                            <h3>Levanta un servidor</h3>
+                            <p>
+                                Un servidor concurrente listo para probar con
+                                carga real.
+                            </p>
+                        </div>
+                    </div>
+                    <Comando
+                        id="cmd-3"
+                        codigo={
+                            "./target/release/vaca ejemplos/servidor_concurrente.vaca"
+                        }
+                    />
+                </li>
+            </ol>
+
+            <aside class="alternativas">
+                <article class="alternativa">
+                    <h3>Comando global</h3>
+                    <Comando id="alt-1" codigo={"cargo install --path ."} />
+                    <p>
+                        Instala <code>vaca</code> en <code>~/.cargo/bin</code>.
+                    </p>
+                </article>
+
+                <article class="alternativa">
+                    <h3>Docker</h3>
+                    <Comando
+                        id="alt-2"
+                        codigo={`docker build -f packaging/Dockerfile -t vaca .
+docker run --rm -p 8080:8080 vaca`}
+                    />
+                </article>
+
+                <article class="alternativa">
+                    <h3>Paquete distribuible</h3>
+                    <Comando
+                        id="alt-3"
+                        codigo={`packaging/empaquetar.sh
+# dist/vaca-0.1.0-x86_64-unknown-linux-gnu.tar.gz`}
+                    />
+                </article>
+
+                <p class="requisitos">
+                    Rust estable · Linux, macOS o Windows · Sin dependencias
+                    externas · Licencia MIT
+                </p>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<style>
+    .seccion {
+        border-block: var(--borde);
+        background: var(--lima);
+    }
+
+    .eyebrow {
+        background: var(--tinta);
+        box-shadow: 3px 3px 0 var(--blanco);
+        color: var(--amarillo);
+    }
+
+    .sub-seccion code {
+        padding: 0.05rem 0.3rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+        font-size: 0.84em;
+        font-weight: 700;
+    }
+
+    .rejilla {
+        display: grid;
+        grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+        gap: clamp(1.5rem, 4vw, 2.5rem);
+        align-items: start;
+    }
+
+    .pasos {
+        display: grid;
+        gap: 1rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .paso {
+        padding: 1.1rem 1.1rem 1.15rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+    }
+
+    .paso-cabecera {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        margin-bottom: 0.9rem;
+    }
+
+    .numero {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 2.1rem;
+        height: 2.1rem;
+        border: 2px solid var(--tinta);
+        background: var(--tinta);
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+    h3 {
+        font-size: 1.05rem;
+        line-height: 1.1;
+    }
+
+    .paso p {
+        margin-top: 0.25rem;
+        color: var(--gris-texto);
+        font-size: 0.84rem;
+    }
+
+    .alternativas {
+        display: grid;
+        gap: 1rem;
+        align-content: start;
+    }
+
+    .alternativa {
+        padding: 0.95rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+    }
+
+    .alternativa h3 {
+        display: inline-block;
+        padding: 0.18rem 0.42rem;
+        border: 2px solid var(--tinta);
+        background: var(--cian);
+        box-shadow: 2px 2px 0 var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+    }
+
+    .alternativa:nth-child(2) h3 {
+        background: var(--rosa);
+    }
+
+    .alternativa:nth-child(3) h3 {
+        background: var(--amarillo);
+    }
+
+    .alternativa p {
+        margin-top: 0.6rem;
+        color: var(--gris-texto);
+        font-size: 0.78rem;
+    }
+
+    .alternativa code {
+        padding: 0.05rem 0.25rem;
+        border: 2px solid var(--tinta);
+        background: var(--papel);
+        font-size: 0.9em;
+        font-weight: 700;
+    }
+
+    .requisitos {
+        padding: 0.7rem 0.85rem;
+        border: 3px solid var(--tinta);
+        background: var(--tinta);
+        color: var(--papel);
+        font-family: var(--mono);
+        font-size: 0.64rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        line-height: 1.7;
+    }
+
+    @media (max-width: 980px) {
+        .rejilla {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+</style>

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "landing",
+      "name": "vaca-landing",
       "dependencies": {
         "astro": "^7.4.1",
       },

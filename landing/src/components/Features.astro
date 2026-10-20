@@ -1,0 +1,200 @@
+---
+const caracteristicas = [
+    {
+        glifo: "{ }",
+        titulo: "Sintaxis en español",
+        texto: "si, sino, mientras, retornar. Sin traducciones mentales ni palabras reservadas en inglés.",
+    },
+    {
+        glifo: ";",
+        titulo: "Llaves y punto y coma opcional",
+        texto: "La estructura se ve a simple vista. El punto y coma existe, pero nunca es obligatorio.",
+    },
+    {
+        glifo: "✓",
+        titulo: "Variables no usadas = error",
+        texto: "El análisis semántico corre antes de ejecutar. Si declaras una variable y no la usas, el programa no arranca.",
+    },
+    {
+        glifo: "T",
+        titulo: "Tipos dinámicos y anotaciones",
+        texto: "Escribe contador: Entero = 0 cuando quieras documentar. El tipado sigue siendo flexible.",
+    },
+    {
+        glifo: "fn",
+        titulo: "Funciones de primera clase",
+        texto: "Valores por defecto, callbacks, closures y recursividad. Las funciones se pasan y se devuelven.",
+    },
+    {
+        glifo: "◈",
+        titulo: "POO sin ceremonia",
+        texto: "Clases, herencia, este e iniciar. Métodos y propiedades con la misma sintaxis de siempre.",
+    },
+    {
+        glifo: "[ ]",
+        titulo: "Colecciones con métodos",
+        texto: "Listas y diccionarios con agregar, filtrar, mapear, ordenar, get, set y mucho más.",
+    },
+    {
+        glifo: "!",
+        titulo: "Errores explícitos",
+        texto: "lanzar, intentar, atrapar y afirmar. Sin excepciones silenciosas ni retornos mágicos.",
+    },
+    {
+        glifo: "↔",
+        titulo: "Módulos nativos",
+        texto: "JSON, matemáticas, archivos, texto, tiempo, sistema y DataFrames en la biblioteca estándar.",
+    },
+    {
+        glifo: "HTTP",
+        titulo: "Servidor incluido",
+        texto: "Cliente y servidor HTTP/1.1. Cada conexión en su hilo, con límite de conexiones configurable.",
+    },
+    {
+        glifo: "▦",
+        titulo: "Datos sin pandas",
+        texto: "Lee CSV, filtra, ordena, agrupa y exporta. DataFrames ligeros que caben en la stdlib.",
+    },
+    {
+        glifo: "⇉",
+        titulo: "Concurrencia real",
+        texto: "async y esperar sobre hilos del sistema. Contadores atómicos, paralelo y esperar_todas.",
+    },
+];
+---
+
+<section class="seccion" id="caracteristicas">
+    <div class="contenedor">
+        <header class="cabecera-seccion">
+            <p class="eyebrow">El lenguaje</p>
+            <h2 class="titulo-seccion">
+                Un lenguaje completo,
+                <br />
+                no un juguete.
+            </h2>
+            <p class="sub-seccion">
+                Lo que esperas de un lenguaje serio, con la sintaxis que ya
+                piensas. Todo esto viene en la biblioteca estándar: no hay
+                paquetes que instalar ni ecosistema que mantener.
+            </p>
+        </header>
+
+        <div class="rejilla">
+            {caracteristicas.map(({ glifo, titulo, texto }, indice) => (
+                <article class="tarjeta">
+                    <span class="indice" aria-hidden="true">
+                        {String(indice + 1).padStart(2, "0")}
+                    </span>
+                    <span class="glifo" aria-hidden="true">
+                        {glifo}
+                    </span>
+                    <h3>{titulo}</h3>
+                    <p>{texto}</p>
+                </article>
+            ))}
+        </div>
+
+        <p class="nota">
+            Sin dependencias externas. Sin <code>node_modules</code>. Solo Rust
+            estable para compilar el motor.
+        </p>
+    </div>
+</section>
+
+<style>
+    .eyebrow {
+        background: var(--rosa);
+    }
+
+    .rejilla {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+
+    .tarjeta {
+        position: relative;
+        padding: 1.25rem 1.25rem 1.35rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .tarjeta:hover {
+        transform: translate(-3px, -3px);
+        box-shadow: 9px 9px 0 var(--tinta);
+    }
+
+    .indice {
+        position: absolute;
+        top: 1.05rem;
+        right: 1.1rem;
+        color: #7c766b;
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+    }
+
+    .glifo {
+        display: inline-grid;
+        place-items: center;
+        min-width: 2.4rem;
+        height: 2.4rem;
+        padding-inline: 0.4rem;
+        border: 2px solid var(--tinta);
+        background: var(--amarillo);
+        box-shadow: 2px 2px 0 var(--tinta);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+
+    .tarjeta:nth-child(4n + 2) .glifo {
+        background: var(--rosa);
+    }
+
+    .tarjeta:nth-child(4n + 3) .glifo {
+        background: var(--cian);
+    }
+
+    .tarjeta:nth-child(4n + 4) .glifo {
+        background: var(--lima);
+    }
+
+    h3 {
+        margin-top: 1rem;
+        font-size: 1rem;
+        line-height: 1.15;
+    }
+
+    .tarjeta p {
+        margin-top: 0.55rem;
+        color: var(--gris-texto);
+        font-size: 0.88rem;
+        line-height: 1.55;
+    }
+
+    .nota {
+        display: inline-block;
+        margin-top: 1.6rem;
+        padding: 0.55rem 0.8rem;
+        border: var(--borde);
+        background: var(--amarillo);
+        box-shadow: 4px 4px 0 var(--tinta);
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .nota code {
+        padding: 0.05rem 0.25rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+        font-size: 0.76rem;
+    }
+</style>

@@ -1,11 +1,33 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import Checklist from "../components/Checklist.astro";
+import Concurrency from "../components/Concurrency.astro";
+import Features from "../components/Features.astro";
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import Hero from "../components/Hero.astro";
+import Install from "../components/Install.astro";
+import Marquee from "../components/Marquee.astro";
+import Showcase from "../components/Showcase.astro";
+import Status from "../components/Status.astro";
+import Tooling from "../components/Tooling.astro";
+import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout>
-	<Welcome />
+    <a class="saltar" href="#contenido">
+        Saltar al contenido
+    </a>
+    <Header />
+    <main id="contenido">
+        <Hero />
+        <Marquee />
+        <Features />
+        <Showcase />
+        <Checklist />
+        <Concurrency />
+        <Install />
+        <Tooling />
+        <Status />
+    </main>
+    <Footer />
 </Layout>

@@ -1,0 +1,336 @@
+---
+type Estado = "completa" | "parcial" | "pendiente";
+
+const fases: [number, string, Estado][] = [
+    [0, "Andamiaje y tipos base", "completa"],
+    [1, "Lexer en español", "completa"],
+    [2, "Parser y AST con llaves", "completa"],
+    [3, "Intérprete de árbol", "completa"],
+    [4, "Compilador a bytecode y VM", "pendiente"],
+    [5, "Funciones, cierres, defaults y recursividad", "completa"],
+    [6, "Listas, diccionarios y métodos nativos", "completa"],
+    [7, "POO: clases, herencia, este e iniciar", "completa"],
+    [8, "Módulos JSON, HTTP, mate, tiempo y sistema", "completa"],
+    [9, "DataFrames y CSV", "completa"],
+    [10, "async, esperar y concurrencia real", "completa"],
+    [11, "CLI, REPL, editor y empaquetado", "parcial"],
+    [12, "Type checker, optimizaciones y GC", "parcial"],
+];
+
+const etiquetas: Record<Estado, string> = {
+    completa: "Completa",
+    parcial: "Parcial",
+    pendiente: "No implementada",
+};
+
+const GITHUB = "https://github.com/ulf-frostypaw/vaca";
+---
+
+<section class="seccion" id="estado">
+    <div class="contenedor">
+        <header class="cabecera-seccion">
+            <p class="eyebrow">Transparencia</p>
+            <h2 class="titulo-seccion">Estado del proyecto.</h2>
+            <p class="sub-seccion">
+                Vaca se construyó por fases. Estas son las que están cerradas,
+                las que están a medias y la que todavía falta. Sin promesas que
+                el código no cumpla.
+            </p>
+        </header>
+
+        <div class="resumen">
+            <div class="cuenta">
+                <span class="num">10</span>
+                <span class="texto">fases completas</span>
+            </div>
+            <div class="cuenta">
+                <span class="num">2</span>
+                <span class="texto">parciales</span>
+            </div>
+            <div class="cuenta">
+                <span class="num">1</span>
+                <span class="texto">pendiente</span>
+            </div>
+        </div>
+
+        <div
+            class="progreso"
+            role="img"
+            aria-label="10 de 13 fases completas, 2 parciales y 1 pendiente"
+        >
+            <span class="p-completa" style="width: 76.9%"></span>
+            <span class="p-parcial" style="width: 15.4%"></span>
+            <span class="p-pendiente" style="width: 7.7%"></span>
+        </div>
+
+        <div class="tabla-envoltura">
+            <table class="fases">
+                <caption class="sr-only">
+                    Estado de las fases del proyecto Vaca
+                </caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Fase</th>
+                        <th scope="col">Contenido</th>
+                        <th scope="col">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {fases.map(([numero, contenido, estado]) => (
+                        <tr>
+                            <td class="numero-fase">
+                                {String(numero).padStart(2, "0")}
+                            </td>
+                            <td>{contenido}</td>
+                            <td>
+                                <span class:list={["chip", `chip-${estado}`]}>
+                                    {etiquetas[estado]}
+                                </span>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="siguiente">
+            <div>
+                <p class="etiqueta">Siguiente objetivo</p>
+                <p class="descripcion">
+                    Un pool de hilos acotado o un event loop para reducir el
+                    coste por tarea y soportar decenas de miles de conexiones
+                    sin 8 MiB por hilo.
+                </p>
+            </div>
+            <a
+                class="enlace"
+                href={`${GITHUB}#estado-de-las-fases`}
+                target="_blank"
+                rel="noreferrer"
+            >
+                Ver roadmap completo <span aria-hidden="true">↗</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<style>
+    .seccion {
+        border-block: var(--borde);
+        background: var(--rosa);
+    }
+
+    .eyebrow {
+        background: var(--tinta);
+        box-shadow: 3px 3px 0 var(--blanco);
+        color: var(--amarillo);
+    }
+
+    .resumen {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .cuenta {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        padding: 0.7rem 1rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: 4px 4px 0 var(--tinta);
+    }
+
+    .cuenta:nth-child(1) {
+        background: var(--lima);
+    }
+
+    .cuenta:nth-child(2) {
+        background: var(--amarillo);
+    }
+
+    .num {
+        font-family: var(--display);
+        font-size: 2.2rem;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        line-height: 0.9;
+    }
+
+    .texto {
+        font-family: var(--mono);
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .progreso {
+        display: flex;
+        height: 1.1rem;
+        overflow: hidden;
+        border: 3px solid var(--tinta);
+        background: var(--blanco);
+    }
+
+    .progreso span {
+        border-right: 2px solid var(--tinta);
+    }
+
+    .progreso span:last-child {
+        border-right: none;
+    }
+
+    .p-completa {
+        background: var(--lima);
+    }
+
+    .p-parcial {
+        background: var(--amarillo);
+    }
+
+    .p-pendiente {
+        background: #d8d2c6;
+    }
+
+    .tabla-envoltura {
+        margin-top: 1.2rem;
+        overflow-x: auto;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+    }
+
+    .fases {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.86rem;
+    }
+
+    .fases th {
+        padding: 0.6rem 0.85rem;
+        border-bottom: 3px solid var(--tinta);
+        background: var(--tinta);
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-align: left;
+        text-transform: uppercase;
+    }
+
+    .fases td {
+        padding: 0.55rem 0.85rem;
+        border-bottom: 2px solid var(--tinta);
+        vertical-align: middle;
+    }
+
+    .fases tr:last-child td {
+        border-bottom: none;
+    }
+
+    .fases tbody tr {
+        transition: background 0.12s ease;
+    }
+
+    .fases tbody tr:hover {
+        background: var(--amarillo);
+    }
+
+    .numero-fase {
+        width: 3.2rem;
+        font-family: var(--mono);
+        font-size: 0.74rem;
+        font-weight: 700;
+    }
+
+    .fases td:nth-child(2) {
+        color: var(--gris-texto);
+        font-weight: 500;
+    }
+
+    .fases td:last-child {
+        width: 9.5rem;
+        text-align: right;
+    }
+
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1rem 0.35rem;
+        border: 2px solid var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.55rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .chip-completa {
+        background: var(--lima);
+    }
+
+    .chip-parcial {
+        background: var(--amarillo);
+    }
+
+    .chip-pendiente {
+        background: #e2ddd2;
+    }
+
+    .siguiente {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.2rem;
+        margin-top: 1.2rem;
+        padding: 1rem 1.1rem;
+        border: var(--borde);
+        background: var(--amarillo);
+        box-shadow: 6px 6px 0 var(--tinta);
+    }
+
+    .etiqueta {
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+    }
+
+    .descripcion {
+        margin-top: 0.35rem;
+        max-width: 68ch;
+        font-size: 0.84rem;
+        font-weight: 500;
+    }
+
+    .enlace {
+        flex: none;
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-decoration: underline;
+        text-decoration-thickness: 3px;
+        text-underline-offset: 0.2em;
+        text-transform: uppercase;
+    }
+
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+</style>

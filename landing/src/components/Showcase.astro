@@ -1,0 +1,379 @@
+---
+import Codigo from "./Codigo.astro";
+import Ventana from "./Ventana.astro";
+
+const ejemplos = [
+    {
+        id: "demo-1",
+        etiqueta: "Hola, mundo",
+        archivo: "hola.vaca",
+        titulo: "Todo lo básico, en español",
+        descripcion:
+            "Variables, anotaciones opcionales, interpolación, bucles y colecciones. El punto y coma es opcional en todo el lenguaje.",
+        puntos: [
+            "Las anotaciones de tipo documentan sin atar el tipado.",
+            "para ... hasta recorre un rango inclusivo.",
+            'a"..." interpola cualquier expresión entre llaves.',
+            "Listas y diccionarios traen métodos nativos.",
+        ],
+        codigo: `
+# Variables, tipos e interpolación
+nombre: Texto = "Mundo"
+contador = 0
+
+para i = 1 hasta 3 {
+    contador = contador + i
+}
+
+imprimir(a"Hola, {nombre}. Suma: {contador}")
+
+# Listas y diccionarios con métodos
+frutas = ["pera", "uva", "higo"]
+frutas.agregar("melón")
+frutas.ordenar()
+imprimir(frutas)
+`,
+    },
+    {
+        id: "demo-2",
+        etiqueta: "API concurrente",
+        archivo: "servidor.vaca",
+        titulo: "Un servidor HTTP sin frameworks",
+        descripcion:
+            "El módulo http trae servidor y cliente. Cada conexión se atiende en su propio hilo y el estado compartido usa primitivas atómicas.",
+        puntos: [
+            "Cada conexión se atiende en un hilo independiente.",
+            "El último argumento limita las conexiones simultáneas.",
+            "concurrencia.contador evita carreras en las métricas.",
+            "Las listas y diccionarios se serializan a JSON solos.",
+        ],
+        codigo: `
+importar http
+importar json
+importar concurrencia
+
+peticiones = concurrencia.contador(0)
+
+fn manejador(peticion) {
+    total = peticiones.incrementar()
+
+    si peticion.metodo == "GET" y peticion.ruta == "/salud" {
+        retornar {"cuerpo": {
+            "estado": "ok",
+            "peticiones": total
+        }}
+    }
+
+    si peticion.metodo == "POST" y peticion.ruta == "/eco" {
+        datos = json.parse(peticion.cuerpo)
+        retornar {"estado": 201,
+                  "cuerpo": {"recibido": datos}}
+    }
+
+    retornar {"estado": 404,
+              "cuerpo": {"error": "no encontrada"}}
+}
+
+http.servidor(8080, manejador, 1000)
+`,
+    },
+    {
+        id: "demo-3",
+        etiqueta: "Datos",
+        archivo: "datos.vaca",
+        titulo: "CSV y DataFrames en la stdlib",
+        descripcion:
+            "Lee un CSV, filtra, ordena, agrupa y devuelve JSON listo para una API. Sin pandas, sin dependencias, sin capas.",
+        puntos: [
+            "Un DataFrame es un diccionario con columnas y filas.",
+            "Filtros: ==, !=, >, <, >=, <= y contiene.",
+            "Resúmenes: suma, promedio, conteo, mínimo y máximo.",
+            "Se serializa a JSON o se guarda de nuevo como CSV.",
+        ],
+        codigo: `
+importar datos
+importar json
+
+df = datos.leer_csv("ventas.csv")
+datos.ver(df)
+
+grandes = datos.filtrar(df, "monto", ">=", 100)
+ordenado = datos.ordenar(grandes, "monto", falso)
+resumen = datos.agrupar_resumir(ordenado, "ciudad", "monto", "suma")
+
+imprimir(json.stringify(resumen))
+datos.guardar_csv(resumen, "resumen.csv")
+`,
+    },
+    {
+        id: "demo-4",
+        etiqueta: "POO",
+        archivo: "figuras.vaca",
+        titulo: "Clases, herencia y polimorfismo",
+        descripcion:
+            "La base lanza un error si no se implementa el método. Las hijas heredan y sobrescriben. El receptor siempre es este.",
+        puntos: [
+            "clase Hijo(Padre) hereda propiedades y métodos.",
+            "iniciar es el constructor y se llama con nuevo.",
+            "lanzar en la base obliga a implementar el contrato.",
+            "para ... en recorre listas de objetos.",
+        ],
+        codigo: `
+clase Figura {
+    fn area() {
+        lanzar "cada figura debe implementar area"
+    }
+}
+
+clase Circulo(Figura) {
+    fn iniciar(radio) {
+        este.radio = radio
+    }
+
+    fn area() {
+        retornar 3.1416 * este.radio * este.radio
+    }
+}
+
+clase Rectangulo(Figura) {
+    fn iniciar(ancho, alto) {
+        este.ancho = ancho
+        este.alto = alto
+    }
+
+    fn area() {
+        retornar este.ancho * este.alto
+    }
+}
+
+figuras = [nuevo Circulo(2), nuevo Rectangulo(3, 4)]
+
+para figura en figuras {
+    imprimir(a"Área: {figura.area()}")
+}
+`,
+    },
+];
+---
+
+<section class="seccion" id="codigo">
+    <div class="contenedor">
+        <header class="cabecera-seccion">
+            <p class="eyebrow">En práctica</p>
+            <h2 class="titulo-seccion">Se lee como se piensa.</h2>
+            <p class="sub-seccion">
+                Sin signos de más ni ceremonias. Cuatro programas reales que
+                puedes ejecutar hoy con <code>vaca archivo.vaca</code>.
+            </p>
+        </header>
+
+        <div class="demo">
+            {ejemplos.map((ejemplo, indice) => (
+                <input
+                    type="radio"
+                    name="demo"
+                    id={ejemplo.id}
+                    checked={indice === 0}
+                    aria-label={ejemplo.etiqueta}
+                />
+            ))}
+
+            <div class="pestanas">
+                {ejemplos.map((ejemplo) => (
+                    <label for={ejemplo.id} id={`${ejemplo.id}-label`}>
+                        {ejemplo.etiqueta}
+                    </label>
+                ))}
+            </div>
+
+            <div class="paneles">
+                {ejemplos.map((ejemplo) => (
+                    <section
+                        class:list={["panel", `panel-${ejemplo.id}`]}
+                        aria-labelledby={`${ejemplo.id}-label`}
+                    >
+                        <div class="panel-codigo">
+                            <Ventana titulo={ejemplo.archivo}>
+                                <Codigo codigo={ejemplo.codigo} />
+                            </Ventana>
+                        </div>
+                        <aside class="panel-notas">
+                            <h3>{ejemplo.titulo}</h3>
+                            <p>{ejemplo.descripcion}</p>
+                            <ul>
+                                {ejemplo.puntos.map((punto) => (
+                                    <li>{punto}</li>
+                                ))}
+                            </ul>
+                        </aside>
+                    </section>
+                ))}
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .seccion {
+        border-block: var(--borde);
+        background: var(--cian);
+    }
+
+    .eyebrow {
+        background: var(--blanco);
+    }
+
+    .sub-seccion code {
+        padding: 0.05rem 0.3rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+        font-size: 0.84em;
+        font-weight: 700;
+    }
+
+    .demo {
+        position: relative;
+    }
+
+    .demo > input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+    }
+
+    .pestanas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+    }
+
+    .pestanas label {
+        padding: 0.48rem 0.72rem;
+        border: 3px solid var(--tinta);
+        background: var(--blanco);
+        box-shadow: 4px 4px 0 var(--tinta);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease,
+            background 0.15s ease,
+            color 0.15s ease;
+    }
+
+    .pestanas label:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 6px 6px 0 var(--tinta);
+    }
+
+    #demo-1:checked ~ .pestanas label[for="demo-1"],
+    #demo-2:checked ~ .pestanas label[for="demo-2"],
+    #demo-3:checked ~ .pestanas label[for="demo-3"],
+    #demo-4:checked ~ .pestanas label[for="demo-4"] {
+        background: var(--tinta);
+        box-shadow: 4px 4px 0 var(--rosa);
+        color: var(--amarillo);
+    }
+
+    #demo-1:focus-visible ~ .pestanas label[for="demo-1"],
+    #demo-2:focus-visible ~ .pestanas label[for="demo-2"],
+    #demo-3:focus-visible ~ .pestanas label[for="demo-3"],
+    #demo-4:focus-visible ~ .pestanas label[for="demo-4"] {
+        outline: 3px solid var(--tinta);
+        outline-offset: 3px;
+    }
+
+    .paneles {
+        margin-top: 1.8rem;
+    }
+
+    .panel {
+        display: none;
+    }
+
+    #demo-1:checked ~ .paneles .panel-demo-1,
+    #demo-2:checked ~ .paneles .panel-demo-2,
+    #demo-3:checked ~ .paneles .panel-demo-3,
+    #demo-4:checked ~ .paneles .panel-demo-4 {
+        display: grid;
+    }
+
+    .panel {
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+        gap: clamp(1.5rem, 4vw, 2.5rem);
+        align-items: start;
+    }
+
+    .panel-codigo :global(.ventana) {
+        box-shadow: 8px 8px 0 var(--tinta);
+    }
+
+    .panel-notas {
+        padding: 1.35rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: 8px 8px 0 var(--tinta);
+    }
+
+    h3 {
+        font-size: 1.35rem;
+        line-height: 1.05;
+    }
+
+    .panel-notas p {
+        margin-top: 0.8rem;
+        color: var(--gris-texto);
+        font-size: 0.9rem;
+    }
+
+    ul {
+        display: grid;
+        gap: 0.6rem;
+        margin: 1.2rem 0 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    li {
+        position: relative;
+        padding-left: 1.8rem;
+        font-size: 0.86rem;
+        font-weight: 500;
+        line-height: 1.45;
+    }
+
+    li::before {
+        content: "✓";
+        position: absolute;
+        top: 0;
+        left: 0;
+        display: grid;
+        place-items: center;
+        width: 1.2rem;
+        height: 1.2rem;
+        border: 2px solid var(--tinta);
+        background: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        font-weight: 700;
+    }
+
+    @media (max-width: 900px) {
+        .panel {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 520px) {
+        .pestanas label {
+            flex: 1 1 auto;
+            text-align: center;
+        }
+    }
+</style>

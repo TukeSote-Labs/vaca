@@ -1,0 +1,175 @@
+---
+import Logo from "./Logo.astro";
+
+const enlaces = [
+    ["/#caracteristicas", "Características"],
+    ["/#codigo", "Código"],
+    ["/#estado", "Estado"],
+    ["/#instalar", "Instalar"],
+    ["/docs/", "Docs"],
+];
+
+const GITHUB = "https://github.com/ulf-frostypaw/vaca";
+const enDocs = Astro.url.pathname.startsWith("/docs");
+---
+
+<header class="cabecera">
+    <div class="contenedor interior">
+        <a class="marca" href="/#inicio" aria-label="Vaca, volver al inicio">
+            <Logo tamano={34} />
+            <span class="nombre">Vaca</span>
+            <span class="version">v0.1.0</span>
+        </a>
+
+        <nav class="navegacion" aria-label="Secciones de la página">
+            {enlaces.map(([href, texto]) => (
+                <a
+                    href={href}
+                    class:list={{ activo: href === "/docs/" && enDocs }}
+                >
+                    {texto}
+                </a>
+            ))}
+        </nav>
+
+        <a class="github" href={GITHUB} target="_blank" rel="noreferrer">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                    fill="currentColor"
+                    d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+                ></path>
+            </svg>
+            <span>GitHub</span>
+        </a>
+    </div>
+</header>
+
+<style>
+    .cabecera {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        border-bottom: var(--borde);
+        background: var(--papel);
+    }
+
+    .interior {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        height: 4.6rem;
+    }
+
+    .marca {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: var(--tinta);
+        text-decoration: none;
+    }
+
+    .nombre {
+        font-family: var(--display);
+        font-size: 1.5rem;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        line-height: 1;
+        text-transform: uppercase;
+    }
+
+    .version {
+        padding: 0.12rem 0.4rem;
+        border: 2px solid var(--tinta);
+        background: var(--cian);
+        box-shadow: 2px 2px 0 var(--tinta);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+    }
+
+    .navegacion {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-left: auto;
+    }
+
+    .navegacion a {
+        padding: 0.35rem 0.55rem;
+        border: 2px solid transparent;
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition:
+            background 0.15s ease,
+            border-color 0.15s ease,
+            box-shadow 0.15s ease,
+            transform 0.15s ease;
+    }
+
+    .navegacion a:hover,
+    .navegacion a.activo {
+        border-color: var(--tinta);
+        background: var(--amarillo);
+        box-shadow: 3px 3px 0 var(--tinta);
+        transform: translate(-1px, -1px);
+    }
+
+    .github {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-left: 0.5rem;
+        padding: 0.5rem 0.8rem;
+        border: var(--borde);
+        background: var(--tinta);
+        box-shadow: 4px 4px 0 var(--rosa);
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .github:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 6px 6px 0 var(--rosa);
+    }
+
+    .github svg {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    @media (max-width: 900px) {
+        .navegacion {
+            display: none;
+        }
+
+        .github {
+            margin-left: auto;
+        }
+    }
+
+    @media (max-width: 520px) {
+        .version,
+        .github span {
+            display: none;
+        }
+
+        .nombre {
+            font-size: 1.3rem;
+        }
+    }
+</style>

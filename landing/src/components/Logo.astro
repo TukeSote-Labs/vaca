@@ -1,0 +1,57 @@
+---
+interface Props {
+    tamano?: number;
+    clase?: string;
+}
+
+const { tamano = 34, clase = "" } = Astro.props;
+---
+
+<svg
+    class:list={["marca", clase]}
+    width={tamano}
+    height={tamano}
+    viewBox="0 0 48 48"
+    role="img"
+    aria-label="Logotipo de Vaca"
+>
+    <rect
+        x="1.5"
+        y="1.5"
+        width="45"
+        height="45"
+        fill="#ffe600"
+        stroke="#0a0a0a"
+        stroke-width="3"
+    ></rect>
+    <path
+        d="M10 15 L19 35 L24 25 L29 35 L38 15"
+        fill="none"
+        stroke="#0a0a0a"
+        stroke-width="4.5"
+        stroke-linecap="square"
+        stroke-linejoin="miter"
+    ></path>
+    <circle
+        cx="9"
+        cy="13"
+        r="3.2"
+        fill="#ff90e8"
+        stroke="#0a0a0a"
+        stroke-width="2"
+    ></circle>
+    <circle
+        cx="39"
+        cy="13"
+        r="3.2"
+        fill="#ff90e8"
+        stroke="#0a0a0a"
+        stroke-width="2"
+    ></circle>
+</svg>
+
+<style>
+    .marca {
+        flex: none;
+    }
+</style>

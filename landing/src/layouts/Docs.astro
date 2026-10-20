@@ -1,0 +1,420 @@
+---
+import DocsNav from '../components/DocsNav.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import Layout from './Layout.astro';
+
+interface Frontmatter {
+  title?: string;
+  description?: string;
+}
+
+interface Props {
+  frontmatter?: Frontmatter;
+}
+
+const { frontmatter } = Astro.props;
+const titulo = frontmatter?.title ?? 'Documentación';
+const descripcion =
+  frontmatter?.description ??
+  'Documentación completa del lenguaje Vaca: sintaxis, biblioteca estándar, HTTP, concurrencia, ejemplos y referencia.';
+
+const GITHUB = 'https://github.com/ulf-frostypaw/vaca';
+---
+
+<Layout title={`${titulo} — Documentación de Vaca`} description={descripcion}>
+  <a class="saltar" href="#contenido">Saltar al contenido</a>
+  <Header />
+
+  <div class="contenedor docs">
+    <aside class="lateral">
+      <p class="lateral-titulo">Documentación</p>
+      <DocsNav />
+      <a class="volver" href="/">← Volver a la landing</a>
+    </aside>
+
+    <div class="principal">
+      <details class="menu-movil">
+        <summary>Menú de documentación</summary>
+        <div class="menu-cuerpo">
+          <DocsNav />
+        </div>
+      </details>
+
+      <nav class="migas" aria-label="Migas de pan">
+        <a href="/">Vaca</a>
+        <span aria-hidden="true">/</span>
+        <a href="/docs/">Docs</a>
+        <span aria-hidden="true">/</span>
+        <span class="actual">{titulo}</span>
+      </nav>
+
+      <article class="prose" id="contenido">
+        <slot />
+      </article>
+
+      <div class="pie-docs">
+        <a href={`${GITHUB}/blob/main/landing/src/pages/docs`} target="_blank" rel="noreferrer">
+          Editar esta documentación en GitHub ↗
+        </a>
+        <a href="/docs/ejemplos/">Ver ejemplos de uso →</a>
+      </div>
+    </div>
+  </div>
+
+  <Footer />
+</Layout>
+
+<style>
+  .docs {
+    display: grid;
+    grid-template-columns: 245px minmax(0, 1fr);
+    gap: clamp(2rem, 4vw, 3.5rem);
+    align-items: start;
+    padding-block: 2.5rem 4.5rem;
+  }
+
+  .lateral {
+    position: sticky;
+    top: 6rem;
+    padding: 1rem;
+    border: var(--borde);
+    background: var(--blanco);
+    box-shadow: var(--sombra);
+  }
+
+  .lateral-titulo {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: 0.2rem 0.45rem;
+    border: 2px solid var(--tinta);
+    background: var(--amarillo);
+    box-shadow: 2px 2px 0 var(--tinta);
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .volver {
+    display: inline-block;
+    margin-top: 1rem;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.18em;
+  }
+
+  .principal {
+    min-width: 0;
+  }
+
+  .migas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.5rem;
+    color: #7c766b;
+    font-family: var(--mono);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .migas a {
+    color: var(--tinta);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+  }
+
+  .migas a:hover {
+    border-bottom-color: var(--tinta);
+  }
+
+  .actual {
+    color: var(--tinta);
+  }
+
+  .menu-movil {
+    display: none;
+    margin-bottom: 1.2rem;
+    border: var(--borde);
+    background: var(--blanco);
+    box-shadow: 4px 4px 0 var(--tinta);
+  }
+
+  .menu-movil summary {
+    padding: 0.65rem 0.8rem;
+    background: var(--amarillo);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .menu-cuerpo {
+    padding: 0.9rem;
+    border-top: 3px solid var(--tinta);
+  }
+
+  .pie-docs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 3rem;
+    padding-top: 1.2rem;
+    border-top: 3px solid var(--tinta);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+
+  .pie-docs a {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.2em;
+  }
+
+  .pie-docs a:hover {
+    background: var(--amarillo);
+  }
+
+  @media (max-width: 900px) {
+    .docs {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .lateral {
+      display: none;
+    }
+
+    .menu-movil {
+      display: block;
+    }
+  }
+</style>
+
+<style is:global>
+  .prose {
+    max-width: 880px;
+  }
+
+  .prose > :first-child {
+    margin-top: 0;
+  }
+
+  .prose h1 {
+    font-size: clamp(2.2rem, 4.5vw, 3.4rem);
+    line-height: 0.95;
+  }
+
+  .prose h2,
+  .prose h3 {
+    scroll-margin-top: 6rem;
+  }
+
+  .prose h2 {
+    margin-top: 3rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 3px solid var(--tinta);
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+  }
+
+  .prose h2::before {
+    content: '';
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.45rem;
+    border: 2px solid var(--tinta);
+    background: var(--amarillo);
+    vertical-align: 0.06em;
+  }
+
+  .prose h3 {
+    margin-top: 2rem;
+    font-size: 1.12rem;
+  }
+
+  .prose h4 {
+    margin-top: 1.6rem;
+    font-size: 0.95rem;
+  }
+
+  .prose p {
+    margin-top: 0.9rem;
+    line-height: 1.7;
+  }
+
+  .prose ul,
+  .prose ol {
+    margin-top: 0.9rem;
+    padding-left: 1.5rem;
+  }
+
+  .prose ul {
+    list-style: square;
+  }
+
+  .prose li {
+    margin-top: 0.35rem;
+    line-height: 1.6;
+  }
+
+  .prose li::marker {
+    color: var(--tinta);
+    font-weight: 700;
+  }
+
+  .prose a {
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.18em;
+  }
+
+  .prose a:hover {
+    background: var(--amarillo);
+  }
+
+  .prose strong {
+    font-weight: 800;
+  }
+
+  .prose :not(pre) > code {
+    padding: 0.08em 0.3em;
+    border: 2px solid var(--tinta);
+    background: var(--blanco);
+    font-size: 0.85em;
+    font-weight: 600;
+  }
+
+  .prose pre {
+    margin: 1.1rem 0 0;
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    border: var(--borde);
+    background: #0a0a0a;
+    box-shadow: 6px 6px 0 var(--tinta);
+    color: #f5f0e3;
+    font-size: 0.8rem;
+    line-height: 1.7;
+    tab-size: 4;
+  }
+
+  .prose pre code {
+    display: block;
+    font: inherit;
+  }
+
+  .prose pre .line {
+    display: inline-block;
+    min-width: 100%;
+  }
+
+  .prose table {
+    width: 100%;
+    margin-top: 1.2rem;
+    border: var(--borde);
+    border-collapse: collapse;
+    background: var(--blanco);
+    box-shadow: 4px 4px 0 var(--tinta);
+    font-size: 0.86rem;
+  }
+
+  .prose thead th {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 3px solid var(--tinta);
+    background: var(--tinta);
+    color: var(--amarillo);
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .prose tbody td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 2px solid var(--tinta);
+    vertical-align: top;
+  }
+
+  .prose tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .prose tbody tr:hover {
+    background: var(--amarillo);
+  }
+
+  .prose blockquote {
+    margin: 1.3rem 0 0;
+    padding: 0.8rem 1rem;
+    border: var(--borde);
+    border-left: 8px solid var(--tinta);
+    background: var(--amarillo);
+    box-shadow: 4px 4px 0 var(--tinta);
+  }
+
+  .prose blockquote p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  .prose blockquote strong {
+    font-weight: 800;
+  }
+
+  .prose hr {
+    margin: 2.2rem 0;
+    border: 0;
+    border-top: 3px solid var(--tinta);
+  }
+
+  .prose img {
+    border: var(--borde);
+    box-shadow: var(--sombra);
+  }
+
+  .prose details {
+    margin-top: 1.2rem;
+    padding: 0.8rem 1rem;
+    border: var(--borde);
+    background: var(--blanco);
+    box-shadow: 4px 4px 0 var(--tinta);
+  }
+
+  .prose summary {
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .prose kbd {
+    padding: 0.08em 0.35em;
+    border: 2px solid var(--tinta);
+    background: var(--blanco);
+    box-shadow: 2px 2px 0 var(--tinta);
+    font-size: 0.78em;
+  }
+
+  @media (max-width: 640px) {
+    .prose table {
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  }
+</style>

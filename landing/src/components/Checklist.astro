@@ -1,0 +1,247 @@
+---
+type Estado = "listo" | "parcial" | "pendiente";
+
+const grupos: { titulo: string; items: [string, Estado][] }[] = [
+    {
+        titulo: "Núcleo del lenguaje",
+        items: [
+            ["Variables y constantes", "listo"],
+            ["Condicionales y bucles", "listo"],
+            ["Funciones, closures y recursión", "listo"],
+            ["Listas y diccionarios", "listo"],
+            ["Clases, herencia y este", "listo"],
+            ["Excepciones y afirmaciones", "listo"],
+            ["Interpolación de texto", "listo"],
+            ["Anotaciones de tipo opcionales", "parcial"],
+        ],
+    },
+    {
+        titulo: "Seguridad y ergonomía",
+        items: [
+            ["Variables no usadas = error", "listo"],
+            ["Llaves, sin indentación", "listo"],
+            ["Punto y coma opcional", "listo"],
+            ["Comprobación estática de tipos", "pendiente"],
+            ["Recolector de basura", "pendiente"],
+            ["super para llamar al padre", "pendiente"],
+        ],
+    },
+    {
+        titulo: "Backend y datos",
+        items: [
+            ["Servidor HTTP concurrente", "listo"],
+            ["Cliente HTTP", "listo"],
+            ["JSON", "listo"],
+            ["CSV y DataFrames", "listo"],
+            ["TLS / HTTPS", "pendiente"],
+            ["Middleware nativo", "pendiente"],
+        ],
+    },
+    {
+        titulo: "Concurrencia",
+        items: [
+            ["async y esperar", "listo"],
+            ["Hilos del sistema", "listo"],
+            ["Contadores atómicos", "listo"],
+            ["paralelo y esperar_todas", "listo"],
+            ["Event loop", "pendiente"],
+            ["Canales entre tareas", "pendiente"],
+        ],
+    },
+    {
+        titulo: "Herramientas",
+        items: [
+            ["CLI: run, repl, tokens, ast", "listo"],
+            ["REPL multilínea", "listo"],
+            ["Extensión de Zed", "listo"],
+            ["Formateador vaca fmt", "pendiente"],
+            ["Gestor de paquetes", "pendiente"],
+            ["LSP", "pendiente"],
+            ["vaca test", "pendiente"],
+        ],
+    },
+    {
+        titulo: "Distribución",
+        items: [
+            ["cargo install", "listo"],
+            ["Tarball con instalador", "listo"],
+            ["Imagen Docker", "listo"],
+            ["Unidad systemd", "listo"],
+            ["Binario estático musl", "listo"],
+            ["Cross-compilación documentada", "listo"],
+        ],
+    },
+];
+
+const etiquetas: Record<Estado, string> = {
+    listo: "Listo",
+    parcial: "Parcial",
+    pendiente: "Pendiente",
+};
+---
+
+<section class="seccion" id="normal">
+    <div class="contenedor">
+        <header class="cabecera-seccion">
+            <p class="eyebrow">Sin marketing</p>
+            <h2 class="titulo-seccion">La lista de un lenguaje normal.</h2>
+            <p class="sub-seccion">
+                Esto es lo que cualquier lenguaje serio debería tener. Vaca no
+                lo tiene todo: aquí está el estado real, sin letra pequeña.
+            </p>
+            <ul class="leyenda" aria-label="Leyenda de estados">
+                <li>
+                    <span class="chip chip-listo">Listo</span>
+                </li>
+                <li>
+                    <span class="chip chip-parcial">Parcial</span>
+                </li>
+                <li>
+                    <span class="chip chip-pendiente">Pendiente</span>
+                </li>
+            </ul>
+        </header>
+
+        <div class="grupos">
+            {grupos.map((grupo) => (
+                <article class="grupo">
+                    <h3>{grupo.titulo}</h3>
+                    <ul>
+                        {grupo.items.map(([nombre, estado]) => (
+                            <li>
+                                <span>{nombre}</span>
+                                <span class:list={["chip", `chip-${estado}`]}>
+                                    {etiquetas[estado]}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </article>
+            ))}
+        </div>
+
+        <p class="nota">
+            El detalle, fase por fase, está en{" "}
+            <a href="#estado">el estado del proyecto</a>.
+        </p>
+    </div>
+</section>
+
+<style>
+    .leyenda {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 1.2rem 0 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .grupos {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .grupo {
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+    }
+
+    .grupo h3 {
+        padding: 0.6rem 0.95rem;
+        border-bottom: var(--borde);
+        background: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        line-height: 1.3;
+    }
+
+    .grupo:nth-child(4n + 2) h3 {
+        background: var(--rosa);
+    }
+
+    .grupo:nth-child(4n + 3) h3 {
+        background: var(--cian);
+    }
+
+    .grupo:nth-child(4n + 4) h3 {
+        background: var(--lima);
+    }
+
+    .grupo ul {
+        display: grid;
+        margin: 0;
+        padding: 0.4rem 0.95rem 0.55rem;
+        list-style: none;
+    }
+
+    .grupo li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.7rem;
+        padding-block: 0.42rem;
+        border-bottom: 1px solid rgba(10, 10, 10, 0.16);
+        font-size: 0.85rem;
+        line-height: 1.3;
+    }
+
+    .grupo li:last-child {
+        border-bottom: none;
+    }
+
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        flex: none;
+        padding: 0.12rem 0.36rem;
+        border: 2px solid var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.56rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .chip-listo {
+        background: var(--lima);
+    }
+
+    .chip-parcial {
+        background: var(--amarillo);
+    }
+
+    .chip-pendiente {
+        background: #e2ddd2;
+    }
+
+    .nota {
+        margin-top: 1.5rem;
+        padding-left: 0.7rem;
+        border-left: 4px solid var(--tinta);
+        font-size: 0.84rem;
+        font-weight: 600;
+    }
+
+    .nota a {
+        text-decoration-thickness: 2px;
+        text-underline-offset: 0.18em;
+    }
+
+    @media (max-width: 900px) {
+        .grupos {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 600px) {
+        .grupos {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+</style>

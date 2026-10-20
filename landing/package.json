@@ -1,5 +1,7 @@
 {
-  "name": "landing",
+  "name": "vaca-landing",
+  "private": true,
+  "description": "Landing oficial del lenguaje Vaca",
   "type": "module",
   "version": "0.0.1",
   "engines": {
