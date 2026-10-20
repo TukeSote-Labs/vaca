@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::error::Error;
@@ -14,7 +16,7 @@ pub fn modulo() -> Value {
     crear_modulo(
         "http",
         vec![
-            ("servidor", nativa("http.servidor", 2, 3, servidor)),
+            ("servidor", nativa("http.servidor", 2, 4, servidor)),
             ("peticion", nativa("http.peticion", 1, 4, peticion)),
             (
                 "codificar_url",
@@ -36,6 +38,16 @@ fn nativa(nombre: &'static str, min: usize, max: usize, funcion: crate::value::N
 // ----------------------------------------------------------------------
 // Servidor
 // ----------------------------------------------------------------------
+
+/// Decrementa el contador de conexiones activas incluso si el hilo de
+/// atención termina de forma anormal (panic).
+struct GuardiaActiva(Arc<AtomicUsize>);
+
+impl Drop for GuardiaActiva {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, AtomicOrdering::SeqCst);
+    }
+}
 
 struct Solicitud {
     metodo: String,
@@ -74,13 +86,38 @@ impl Solicitud {
 }
 
 fn servidor(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
-    let (host, puerto, manejador) = match args.len() {
+    let (host, puerto, manejador, limite) = match args.len() {
         2 => (
             "0.0.0.0".to_string(),
             puerto_valor(&args[0])?,
             args[1].clone(),
+            None,
         ),
-        3 => (args[0].a_texto(), puerto_valor(&args[1])?, args[2].clone()),
+        3 => {
+            // `http.servidor(puerto, manejador, limite)` o
+            // `http.servidor(host, puerto, manejador)`.
+            if args[0].a_entero_exacto().is_some() {
+                (
+                    "0.0.0.0".to_string(),
+                    puerto_valor(&args[0])?,
+                    args[1].clone(),
+                    limite_valor(&args[2])?,
+                )
+            } else {
+                (
+                    args[0].a_texto(),
+                    puerto_valor(&args[1])?,
+                    args[2].clone(),
+                    None,
+                )
+            }
+        }
+        4 => (
+            args[0].a_texto(),
+            puerto_valor(&args[1])?,
+            args[2].clone(),
+            limite_valor(&args[3])?,
+        ),
         _ => unreachable!(),
     };
     if !manejador.es_llamable() {
@@ -95,32 +132,135 @@ fn servidor(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Erro
             direccion, e
         ))
     })?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|e| Error::ejecucion(format!("no se pudo configurar el servidor: {}", e)))?;
     let local = listener
         .local_addr()
         .map(|a| a.to_string())
         .unwrap_or(direccion);
-    interprete.escribir_linea(&format!("Servidor Vaca escuchando en http://{}", local));
+    let hilos = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    match limite {
+        Some(limite) => interprete.escribir_linea(&format!(
+            "Servidor Vaca escuchando en http://{} ({} hilos de CPU, límite {} conexiones)",
+            local, hilos, limite
+        )),
+        None => interprete.escribir_linea(&format!(
+            "Servidor Vaca escuchando en http://{} ({} hilos de CPU, conexiones ilimitadas)",
+            local, hilos
+        )),
+    }
 
-    for conexion in listener.incoming() {
-        match conexion {
-            Ok(mut stream) => {
-                let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
-                let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
-                let resultado = atender_conexion(interprete, &mut stream, &manejador);
-                match resultado {
-                    Ok(()) => {}
-                    Err(Error::Salir(codigo)) => return Err(Error::Salir(codigo)),
-                    Err(error) => {
-                        interprete.escribir_linea(&format!("Error atendiendo conexión: {}", error));
-                    }
-                }
+    // Código de salida compartido: -1 significa «seguir atendiendo». Cuando
+    // cualquier manejador llama a `sistema.salir`, el bucle principal lo ve y
+    // termina el servidor de forma ordenada.
+    let salir = Arc::new(AtomicI32::new(-1));
+    let activas = Arc::new(AtomicUsize::new(0));
+
+    loop {
+        let codigo = salir.load(AtomicOrdering::SeqCst);
+        if codigo >= 0 {
+            return Err(Error::Salir(codigo));
+        }
+
+        let (mut stream, remoto) = match listener.accept() {
+            Ok(par) => par,
+            Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                // Sin conexiones pendientes: dormimos un instante para no
+                // consumir CPU mientras esperamos la siguiente.
+                std::thread::sleep(Duration::from_millis(2));
+                continue;
             }
             Err(error) => {
                 interprete.escribir_linea(&format!("Error de conexión: {}", error));
+                std::thread::sleep(Duration::from_millis(50));
+                continue;
+            }
+        };
+
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
+        let _ = stream.set_nodelay(true);
+
+        if let Some(limite) = limite {
+            if activas.load(AtomicOrdering::SeqCst) >= limite {
+                // Descarta la petición ya enviada antes de cerrar. Sin esto,
+                // el socket se cierra con datos sin leer y el cliente puede
+                // recibir un RST en lugar del 503.
+                descartar_entrada(&mut stream);
+                let _ = escribir_respuesta(
+                    &mut stream,
+                    503,
+                    "Servidor ocupado, intenta de nuevo\n",
+                    "text/plain; charset=utf-8",
+                    &[("Retry-After".to_string(), "1".to_string())],
+                );
+                let _ = stream.shutdown(std::net::Shutdown::Read);
+                continue;
             }
         }
+
+        let mut trabajador = interprete.crear_tarea();
+        let manejador = manejador.clone();
+        let salir = Arc::clone(&salir);
+        let guardia = GuardiaActiva(Arc::clone(&activas));
+        let ip = remoto.ip().to_string();
+        activas.fetch_add(1, AtomicOrdering::SeqCst);
+
+        let inicio = std::thread::Builder::new()
+            .name(format!("vaca-http-{}", ip))
+            .stack_size(8 * 1024 * 1024)
+            .spawn(move || {
+                // El guardián libera la plaza de conexión al salir del hilo,
+                // también si el intérprete entra en pánico.
+                let _guardia = guardia;
+                let resultado = atender_conexion(&mut trabajador, &mut stream, &manejador);
+                match resultado {
+                    Ok(()) => {}
+                    Err(Error::Salir(codigo)) => {
+                        salir.store(codigo.max(0), AtomicOrdering::SeqCst);
+                    }
+                    Err(error) => {
+                        trabajador.escribir_linea(&format!("Error atendiendo conexión: {}", error));
+                    }
+                }
+            });
+
+        if let Err(error) = inicio {
+            // Si el hilo no llegó a crearse, el cierre de la clausura libera
+            // la plaza mediante el guardián.
+            interprete.escribir_linea(&format!("No se pudo atender la conexión: {}", error));
+        }
     }
-    Ok(Value::Nulo)
+}
+
+/// Lee y descarta lo que el cliente ya haya enviado, sin bloquearse.
+fn descartar_entrada(stream: &mut TcpStream) {
+    if stream.set_nonblocking(true).is_err() {
+        return;
+    }
+    let mut buffer = [0u8; 8192];
+    loop {
+        match stream.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(_) => continue,
+            Err(_) => break,
+        }
+    }
+    let _ = stream.set_nonblocking(false);
+}
+
+fn limite_valor(valor: &Value) -> Result<Option<usize>, Error> {
+    let n = valor
+        .a_entero_exacto()
+        .ok_or_else(|| Error::ejecucion("el límite de conexiones debe ser un entero"))?;
+    if n <= 0 {
+        Ok(None)
+    } else {
+        Ok(Some(n as usize))
+    }
 }
 
 fn atender_conexion(
@@ -136,7 +276,16 @@ fn atender_conexion(
         }
     };
 
-    let respuesta = match interprete.llamar(manejador.clone(), vec![solicitud.a_valor()]) {
+    let resultado = interprete
+        .llamar(manejador.clone(), vec![solicitud.a_valor()])
+        .and_then(|valor| match valor {
+            // Un manejador `async` devuelve una tarea: la esperamos antes de
+            // construir la respuesta HTTP.
+            Value::Tarea(tarea) => tarea.esperar(),
+            otro => Ok(otro),
+        });
+
+    let respuesta = match resultado {
         Ok(valor) => valor,
         Err(Error::Salir(codigo)) => return Err(Error::Salir(codigo)),
         Err(Error::Lanzado(valor)) => {
@@ -171,7 +320,7 @@ fn atender_conexion(
 fn construir_respuesta(valor: Value) -> (u16, String, String, Vec<(String, String)>) {
     match valor {
         Value::Diccionario(dict) => {
-            let dict = dict.borrow().clone();
+            let dict = dict.lock().unwrap().clone();
             let estado = dict
                 .get("estado")
                 .and_then(|v| v.a_entero_exacto())
@@ -204,7 +353,7 @@ fn construir_respuesta(valor: Value) -> (u16, String, String, Vec<(String, Strin
                 });
             let mut extra = Vec::new();
             if let Some(Value::Diccionario(cabeceras)) = dict.get("cabeceras") {
-                for (clave, valor) in cabeceras.borrow().iter() {
+                for (clave, valor) in cabeceras.lock().unwrap().iter() {
                     let clave_min = clave.to_lowercase();
                     if clave_min != "content-length"
                         && clave_min != "content-type"
@@ -429,7 +578,7 @@ fn peticion(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
         .unwrap_or_else(|| "GET".to_string());
     let cuerpo = args.get(2).map(|v| v.a_texto()).unwrap_or_default();
     let cabeceras_extra = match args.get(3) {
-        Some(Value::Diccionario(d)) => d.borrow().clone(),
+        Some(Value::Diccionario(d)) => d.lock().unwrap().clone(),
         None => HashMap::new(),
         Some(otro) => {
             return Err(Error::ejecucion(format!(

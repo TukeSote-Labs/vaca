@@ -1,0 +1,92 @@
+# Concurrencia real con hilos: tareas async, contadores atómicos y paralelismo.
+# Ejecuta: vaca ejemplos/concurrencia.vaca
+
+importar tiempo
+importar concurrencia
+
+imprimir("=== 1. Tareas async en paralelo ===")
+
+async fn consultar(nombre, milisegundos) {
+    tiempo.dormir(milisegundos)
+    retornar a"{nombre} lista"
+}
+
+inicio = tiempo.millis()
+primera = consultar("API-A", 200)
+segunda = consultar("API-B", 200)
+resultado_a = esperar primera
+resultado_b = esperar segunda
+transcurrido = tiempo.millis() - inicio
+
+imprimir(resultado_a, "+", resultado_b)
+imprimir(a"Dos consultas de 200 ms tardaron {transcurrido} ms")
+afirmar(transcurrido < 380, "las tareas no se ejecutaron en paralelo")
+
+imprimir("")
+imprimir("=== 2. concurrencia.paralelo ===")
+
+fn tarea_corta() {
+    tiempo.dormir(120)
+    retornar "corta"
+}
+
+fn tarea_larga() {
+    tiempo.dormir(120)
+    retornar "larga"
+}
+
+inicio = tiempo.millis()
+valores = concurrencia.paralelo([tarea_corta, tarea_larga])
+transcurrido = tiempo.millis() - inicio
+imprimir("Resultados:", valores)
+imprimir(a"Paralelo: {transcurrido} ms")
+afirmar(transcurrido < 230, "concurrencia.paralelo no fue paralelo")
+
+imprimir("")
+imprimir("=== 3. Contador atómico compartido ===")
+
+contador = concurrencia.contador(0)
+
+fn trabajar(veces) {
+    para _ = 1 hasta veces {
+        contador.incrementar()
+    }
+    retornar verdadero
+}
+
+tareas = []
+para _ = 1 hasta 8 {
+    tareas.agregar(concurrencia.tarea(trabajar, 1000))
+}
+concurrencia.esperar_todas(tareas)
+
+total = contador.valor()
+imprimir(a"Contador atómico: {total} (esperado 8000)")
+afirmar(total == 8000, "se perdieron incrementos del contador")
+
+imprimir("")
+imprimir("=== 4. Diccionario compartido con incremento atómico ===")
+
+visitas = {}
+
+fn visitar(veces) {
+    para _ = 1 hasta veces {
+        visitas.incrementar("total")
+    }
+    retornar nulo
+}
+
+tareas = []
+para _ = 1 hasta 4 {
+    tareas.agregar(concurrencia.tarea(visitar, 500))
+}
+concurrencia.esperar_todas(tareas)
+
+total_visitas = visitas.get("total", 0)
+imprimir(a"Visitas: {total_visitas} (esperado 2000)")
+afirmar(total_visitas == 2000, "se perdieron incrementos del diccionario")
+
+imprimir("")
+imprimir("=== 5. Hilos disponibles ===")
+imprimir(a"Este equipo tiene {concurrencia.hilos()} hilos de CPU")
+imprimir("Concurrencia verificada.")

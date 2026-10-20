@@ -5,25 +5,23 @@
 importar http
 importar json
 importar tiempo
+importar concurrencia
 
 productos = [
     {"id": 1, "nombre": "Teclado", "precio": 30},
     {"id": 2, "nombre": "Monitor", "precio": 180}
 ]
-siguiente_id = 3
+siguiente_id = concurrencia.contador(2)
 peticiones_por_ip = {}
 limite_por_minuto = 20
 
 fn limitar(ip) {
-    ahora = tiempo.ahora()
-    registro = peticiones_por_ip.get(ip, {"inicio": ahora, "cuenta": 0})
-    si ahora - registro.inicio >= 60 {
-        registro.inicio = ahora
-        registro.cuenta = 0
-    }
-    registro.cuenta = registro.cuenta + 1
-    peticiones_por_ip.set(ip, registro)
-    retornar registro.cuenta <= limite_por_minuto
+    # Clave por minuto: el incremento es atómico aunque lleguen peticiones
+    # simultáneas desde la misma IP.
+    minuto = entero(tiempo.ahora() / 60)
+    clave = a"{ip}:{minuto}"
+    cuenta = peticiones_por_ip.incrementar(clave)
+    retornar cuenta <= limite_por_minuto
 }
 
 fn responder(estado, cuerpo) {
@@ -92,11 +90,10 @@ fn manejador(peticion) {
             }
 
             producto = {
-                "id": siguiente_id,
+                "id": siguiente_id.incrementar(),
                 "nombre": nombre,
                 "precio": precio
             }
-            siguiente_id = siguiente_id + 1
             productos.agregar(producto)
             retornar responder(201, {"producto": producto})
         } atrapar error {

@@ -1,8 +1,7 @@
 //! Módulo `json`: parse y stringify sin dependencias externas.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use crate::error::Error;
 use crate::interprete::Interprete;
@@ -175,7 +174,7 @@ impl ParserJson {
         self.saltar_espacios();
         if self.actual() == Some('}') {
             self.pos += 1;
-            return Ok(Value::Diccionario(Rc::new(RefCell::new(mapa))));
+            return Ok(Value::Diccionario(Arc::new(Mutex::new(mapa))));
         }
         loop {
             self.saltar_espacios();
@@ -213,7 +212,7 @@ impl ParserJson {
                 }
             }
         }
-        Ok(Value::Diccionario(Rc::new(RefCell::new(mapa))))
+        Ok(Value::Diccionario(Arc::new(Mutex::new(mapa))))
     }
 
     fn lista(&mut self) -> Result<Value, String> {
@@ -399,7 +398,7 @@ fn stringify_prof(valor: &Value, indentar: bool, nivel: usize) -> Result<String,
         }
         Value::Texto(t) => Ok(escapar_texto(t)),
         Value::Lista(lista) => {
-            let elementos = lista.borrow();
+            let elementos = lista.lock().unwrap();
             if elementos.is_empty() {
                 return Ok("[]".to_string());
             }
@@ -421,14 +420,19 @@ fn stringify_prof(valor: &Value, indentar: bool, nivel: usize) -> Result<String,
             }
         }
         Value::Diccionario(dict) => {
-            let mut claves: Vec<String> = dict.borrow().keys().cloned().collect();
+            let mut claves: Vec<String> = dict.lock().unwrap().keys().cloned().collect();
             claves.sort();
             if claves.is_empty() {
                 return Ok("{}".to_string());
             }
             let mut partes = Vec::with_capacity(claves.len());
             for clave in claves {
-                let valor = dict.borrow().get(&clave).cloned().unwrap_or(Value::Nulo);
+                let valor = dict
+                    .lock()
+                    .unwrap()
+                    .get(&clave)
+                    .cloned()
+                    .unwrap_or(Value::Nulo);
                 partes.push(format!(
                     "{}:{}",
                     escapar_texto(&clave),
@@ -449,7 +453,7 @@ fn stringify_prof(valor: &Value, indentar: bool, nivel: usize) -> Result<String,
             }
         }
         Value::Instancia(instancia) => {
-            let instancia = instancia.borrow();
+            let instancia = instancia.lock().unwrap();
             let mut claves: Vec<String> = instancia.campos.keys().cloned().collect();
             claves.sort();
             let mut partes = Vec::with_capacity(claves.len());

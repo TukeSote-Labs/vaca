@@ -2,6 +2,7 @@
 
 pub mod archivo;
 pub mod cadenas;
+pub mod concurrencia;
 pub mod datos;
 pub mod http;
 pub mod json;
@@ -10,7 +11,7 @@ pub mod sistema;
 pub mod tiempo;
 
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::value::{Modulo, NativaFn, Value};
 
@@ -23,7 +24,7 @@ pub fn crear_modulo(nombre: &str, miembros: Vec<(&str, Value)>) -> Value {
     for (clave, valor) in miembros {
         mapa.insert(clave.to_string(), valor);
     }
-    Value::Modulo(Rc::new(Modulo {
+    Value::Modulo(Arc::new(Modulo {
         nombre: nombre.to_string(),
         miembros: mapa,
     }))
@@ -40,6 +41,7 @@ pub fn obtener_modulo(nombre: &str) -> Option<Value> {
         "datos" => Some(datos::modulo()),
         "http" => Some(http::modulo()),
         "cadenas" | "texto" => Some(cadenas::modulo()),
+        "concurrencia" | "concurrente" => Some(concurrencia::modulo()),
         _ => None,
     }
 }

@@ -12,7 +12,9 @@ fn todos_los_ejemplos_se_ejecutan() {
         .filter(|ruta| ruta.extension().and_then(|e| e.to_str()) == Some("vaca"))
         .filter(|ruta| {
             let nombre = ruta.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            nombre != "servidor.vaca" && nombre != "servidor_api.vaca"
+            nombre != "servidor.vaca"
+                && nombre != "servidor_api.vaca"
+                && nombre != "servidor_concurrente.vaca"
         })
         .collect();
     ejemplos.sort();

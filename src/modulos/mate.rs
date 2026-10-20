@@ -53,7 +53,12 @@ fn a_numero(valor: &Value, nombre: &str) -> Result<f64, Error> {
 fn recolectar_numeros(args: &[Value], nombre: &str) -> Result<Vec<f64>, Error> {
     if args.len() == 1 {
         if let Value::Lista(lista) = &args[0] {
-            return lista.borrow().iter().map(|v| a_numero(v, nombre)).collect();
+            return lista
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|v| a_numero(v, nombre))
+                .collect();
         }
     }
     args.iter().map(|v| a_numero(v, nombre)).collect()

@@ -1,10 +1,11 @@
 //! Valores en tiempo de ejecución.
 
-use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicI64, Ordering as AtomicOrdering};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 
 use crate::ast::{Parametro, Stmt};
 use crate::error::Error;
@@ -16,18 +17,18 @@ pub struct Funcion {
     pub nombre: String,
     pub parametros: Vec<Parametro>,
     pub cuerpo: Vec<Stmt>,
-    pub entorno: Rc<RefCell<Entorno>>,
+    pub entorno: Arc<Mutex<Entorno>>,
     pub es_async: bool,
 }
 
 pub struct Clase {
     pub nombre: String,
-    pub padre: Option<Rc<Clase>>,
-    pub metodos: HashMap<String, Rc<Funcion>>,
+    pub padre: Option<Arc<Clase>>,
+    pub metodos: HashMap<String, Arc<Funcion>>,
 }
 
 pub struct Instancia {
-    pub clase: Rc<Clase>,
+    pub clase: Arc<Clase>,
     pub campos: HashMap<String, Value>,
 }
 
@@ -43,6 +44,49 @@ pub struct Nativa {
     pub funcion: NativaFn,
 }
 
+/// Tarea concurrente creada por una función `async`.
+pub struct Tarea {
+    handle: Mutex<Option<JoinHandle<Result<Value, Error>>>>,
+    resultado: Mutex<Option<Result<Value, Error>>>,
+    espera: Mutex<()>,
+}
+
+impl Tarea {
+    pub fn nueva(handle: JoinHandle<Result<Value, Error>>) -> Self {
+        Tarea {
+            handle: Mutex::new(Some(handle)),
+            resultado: Mutex::new(None),
+            espera: Mutex::new(()),
+        }
+    }
+
+    /// Espera a que la tarea termine. Se puede llamar varias veces; el
+    /// resultado queda cacheado.
+    pub fn esperar(&self) -> Result<Value, Error> {
+        if let Some(resultado) = self.resultado.lock().unwrap().clone() {
+            return resultado;
+        }
+
+        let _guardia = self.espera.lock().unwrap();
+        if let Some(resultado) = self.resultado.lock().unwrap().clone() {
+            return resultado;
+        }
+
+        let handle = self.handle.lock().unwrap().take();
+        let resultado = match handle {
+            Some(handle) => handle
+                .join()
+                .unwrap_or_else(|_| Err(Error::ejecucion("la tarea terminó de forma anormal"))),
+            None => Err(Error::ejecucion(
+                "la tarea no tiene un resultado disponible",
+            )),
+        };
+
+        *self.resultado.lock().unwrap() = Some(resultado.clone());
+        resultado
+    }
+}
+
 #[derive(Clone)]
 pub enum Value {
     Entero(i64),
@@ -50,20 +94,24 @@ pub enum Value {
     Texto(String),
     Logico(bool),
     Nulo,
-    Lista(Rc<RefCell<Vec<Value>>>),
-    Diccionario(Rc<RefCell<HashMap<String, Value>>>),
-    Funcion(Rc<Funcion>),
-    Nativa(Rc<Nativa>),
-    Clase(Rc<Clase>),
-    Instancia(Rc<RefCell<Instancia>>),
-    Modulo(Rc<Modulo>),
+    Lista(Arc<Mutex<Vec<Value>>>),
+    Diccionario(Arc<Mutex<HashMap<String, Value>>>),
+    Funcion(Arc<Funcion>),
+    Nativa(Arc<Nativa>),
+    Clase(Arc<Clase>),
+    Instancia(Arc<Mutex<Instancia>>),
+    Modulo(Arc<Modulo>),
     /// Método nativo pendiente de llamada, por ejemplo `lista.agregar`.
-    MetodoNativo(Rc<(Value, String)>),
+    MetodoNativo(Arc<(Value, String)>),
+    /// Tarea concurrente creada por `async fn`.
+    Tarea(Arc<Tarea>),
+    /// Contador atómico seguro para múltiples hilos.
+    Contador(Arc<AtomicI64>),
 }
 
 impl Value {
     pub fn lista(elementos: Vec<Value>) -> Value {
-        Value::Lista(Rc::new(RefCell::new(elementos)))
+        Value::Lista(Arc::new(Mutex::new(elementos)))
     }
 
     pub fn diccionario(pares: Vec<(String, Value)>) -> Value {
@@ -71,11 +119,11 @@ impl Value {
         for (clave, valor) in pares {
             mapa.insert(clave, valor);
         }
-        Value::Diccionario(Rc::new(RefCell::new(mapa)))
+        Value::Diccionario(Arc::new(Mutex::new(mapa)))
     }
 
     pub fn nativa(nombre: &str, min_args: usize, max_args: usize, funcion: NativaFn) -> Value {
-        Value::Nativa(Rc::new(Nativa {
+        Value::Nativa(Arc::new(Nativa {
             nombre: nombre.to_string(),
             min_args,
             max_args,
@@ -98,6 +146,8 @@ impl Value {
             Value::Instancia(_) => "Instancia",
             Value::Modulo(_) => "Modulo",
             Value::MetodoNativo(_) => "Funcion",
+            Value::Tarea(_) => "Tarea",
+            Value::Contador(_) => "Contador",
         }
     }
 
@@ -120,25 +170,23 @@ impl Value {
                 if profundidad > 50 {
                     return "[...]".to_string();
                 }
-                let elementos: Vec<String> = lista
-                    .borrow()
-                    .iter()
-                    .map(|v| v.repr(profundidad + 1))
-                    .collect();
+                let elementos: Vec<Value> = lista.lock().unwrap().clone();
+                let elementos: Vec<String> =
+                    elementos.iter().map(|v| v.repr(profundidad + 1)).collect();
                 format!("[{}]", elementos.join(", "))
             }
             Value::Diccionario(dict) => {
                 if profundidad > 50 {
                     return "{...}".to_string();
                 }
-                let mut claves: Vec<String> = dict.borrow().keys().cloned().collect();
+                let mapa: HashMap<String, Value> = dict.lock().unwrap().clone();
+                let mut claves: Vec<String> = mapa.keys().cloned().collect();
                 claves.sort();
                 let pares: Vec<String> = claves
                     .into_iter()
-                    .filter_map(|k| {
-                        dict.borrow()
-                            .get(&k)
-                            .map(|v| format!("{:?}: {}", k, v.repr(profundidad + 1)))
+                    .map(|k| {
+                        let valor = mapa.get(&k).cloned().unwrap_or(Value::Nulo);
+                        format!("{:?}: {}", k, valor.repr(profundidad + 1))
                     })
                     .collect();
                 format!("{{{}}}", pares.join(", "))
@@ -152,9 +200,11 @@ impl Value {
             }
             Value::Nativa(n) => format!("<fn nativa {}>", n.nombre),
             Value::Clase(c) => format!("<clase {}>", c.nombre),
-            Value::Instancia(i) => format!("<{}>", i.borrow().clase.nombre),
+            Value::Instancia(i) => format!("<{}>", i.lock().unwrap().clase.nombre),
             Value::Modulo(m) => format!("<módulo {}>", m.nombre),
             Value::MetodoNativo(_) => "<método nativo>".to_string(),
+            Value::Tarea(_) => "<tarea>".to_string(),
+            Value::Contador(c) => c.load(AtomicOrdering::SeqCst).to_string(),
         }
     }
 
@@ -240,8 +290,10 @@ pub fn valor_verdadero(valor: &Value) -> bool {
         Value::Entero(n) => *n != 0,
         Value::Decimal(n) => *n != 0.0,
         Value::Texto(t) => !t.is_empty(),
-        Value::Lista(l) => !l.borrow().is_empty(),
-        Value::Diccionario(d) => !d.borrow().is_empty(),
+        Value::Lista(l) => !l.lock().unwrap().is_empty(),
+        Value::Diccionario(d) => !d.lock().unwrap().is_empty(),
+        Value::Tarea(_) => true,
+        Value::Contador(c) => c.load(AtomicOrdering::SeqCst) != 0,
         _ => true,
     }
 }
@@ -263,33 +315,35 @@ fn iguales_profundidad(a: &Value, b: &Value, profundidad: usize) -> bool {
         (Value::Logico(x), Value::Logico(y)) => x == y,
         (Value::Nulo, Value::Nulo) => true,
         (Value::Lista(x), Value::Lista(y)) => {
-            if Rc::ptr_eq(x, y) {
+            if Arc::ptr_eq(x, y) {
                 return true;
             }
-            let x = x.borrow();
-            let y = y.borrow();
+            let x = x.lock().unwrap().clone();
+            let y = y.lock().unwrap().clone();
             x.len() == y.len()
                 && x.iter()
                     .zip(y.iter())
                     .all(|(a, b)| iguales_profundidad(a, b, profundidad + 1))
         }
         (Value::Diccionario(x), Value::Diccionario(y)) => {
-            if Rc::ptr_eq(x, y) {
+            if Arc::ptr_eq(x, y) {
                 return true;
             }
-            let x = x.borrow();
-            let y = y.borrow();
+            let x = x.lock().unwrap().clone();
+            let y = y.lock().unwrap().clone();
             x.len() == y.len()
                 && x.iter().all(|(clave, valor)| {
                     y.get(clave)
                         .is_some_and(|otro| iguales_profundidad(valor, otro, profundidad + 1))
                 })
         }
-        (Value::Instancia(x), Value::Instancia(y)) => Rc::ptr_eq(x, y),
-        (Value::Clase(x), Value::Clase(y)) => Rc::ptr_eq(x, y),
-        (Value::Funcion(x), Value::Funcion(y)) => Rc::ptr_eq(x, y),
-        (Value::Nativa(x), Value::Nativa(y)) => Rc::ptr_eq(x, y),
-        (Value::Modulo(x), Value::Modulo(y)) => Rc::ptr_eq(x, y),
+        (Value::Instancia(x), Value::Instancia(y)) => Arc::ptr_eq(x, y),
+        (Value::Clase(x), Value::Clase(y)) => Arc::ptr_eq(x, y),
+        (Value::Funcion(x), Value::Funcion(y)) => Arc::ptr_eq(x, y),
+        (Value::Nativa(x), Value::Nativa(y)) => Arc::ptr_eq(x, y),
+        (Value::Modulo(x), Value::Modulo(y)) => Arc::ptr_eq(x, y),
+        (Value::Tarea(x), Value::Tarea(y)) => Arc::ptr_eq(x, y),
+        (Value::Contador(x), Value::Contador(y)) => Arc::ptr_eq(x, y),
         _ => false,
     }
 }

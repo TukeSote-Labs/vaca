@@ -1,30 +1,49 @@
-# Sintaxis async/await de Vaca.
+# Tareas concurrentes con async/esperar.
 # Ejecuta: vaca ejemplos/async.vaca
 #
-# Nota: en la implementación actual la ejecución es síncrona; `esperar`
-# evalúa la tarea en el mismo hilo. La sintaxis está preparada para un
-# runtime asíncrono futuro.
+# Cada llamada a una función `async` arranca un hilo de trabajo y devuelve
+# una tarea. `esperar` bloquea hasta que la tarea termina y devuelve su
+# resultado. Llamar dos veces a `esperar` sobre la misma tarea reutiliza el
+# resultado (no se ejecuta dos veces).
 
 importar tiempo
 
 async fn consultar(nombre, milisegundos) {
     imprimir(a"Iniciando consulta {nombre}")
-    esperar tiempo.dormir(milisegundos)
+    tiempo.dormir(milisegundos)
     imprimir(a"Consulta {nombre} terminada")
     retornar {"nombre": nombre, "latencia": milisegundos}
 }
 
-async fn principal() {
-    primera = esperar consultar("A", 20)
-    segunda = esperar consultar("B", 10)
-    retornar [primera, segunda]
-}
+inicio = tiempo.millis()
+primera = consultar("A", 150)
+segunda = consultar("B", 150)
 
-resultado = esperar principal()
-imprimir("Resultado:", resultado)
+resultado_a = esperar primera
+resultado_b = esperar segunda
+total = tiempo.millis() - inicio
 
+imprimir("Resultado:", [resultado_a, resultado_b])
+imprimir(a"Tiempo total: {total} ms (en serie serían ~300 ms)")
+
+# El resultado de una tarea queda cacheado.
+imprimir("Segunda espera de A:", esperar primera)
+
+# Una tarea anónima también se ejecuta en su propio hilo.
 tarea = async fn() {
-    esperar tiempo.dormir(5)
+    tiempo.dormir(5)
     retornar 42
 }
 imprimir("Tarea anónima:", esperar tarea())
+
+# Los errores lanzados dentro de una tarea se propagan al esperarla.
+async fn fallar() {
+    tiempo.dormir(10)
+    lanzar "fallo dentro de la tarea"
+}
+
+intentar {
+    esperar fallar()
+} atrapar error {
+    imprimir(a"Error capturado: {error}")
+}

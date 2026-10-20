@@ -9,15 +9,18 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 - Funciones, cierres (closures), callbacks y recursividad.
 - Listas, diccionarios y POO con clases, herencia y `este`.
 - Módulos nativos para **HTTP**, **JSON**, **DataFrames/CSV**, archivos,
-  matemáticas, texto, tiempo y sistema.
+  matemáticas, texto, tiempo, sistema y **concurrencia**.
+- **Concurrencia real con hilos**: `async fn`, `esperar`, contadores atómicos y
+  servidor HTTP que atiende conexiones en paralelo.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 44 pruebas automatizadas y ejemplos ejecutables.
+- 53 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** intérprete de árbol funcional con análisis semántico previo de
-> variables locales no usadas. No usa bytecode ni un runtime asíncrono real;
-> consulta [Estado de las fases](#estado-de-las-fases) y [Limitaciones](#limitaciones).
+> variables locales no usadas y concurrencia real basada en hilos. No usa
+> bytecode; consulta [Estado de las fases](#estado-de-las-fases) y
+> [Limitaciones](#limitaciones).
 
 ## Documentación
 
@@ -88,13 +91,14 @@ convención del lenguaje.
 ./target/release/vaca ejemplos/poo_avanzada.vaca
 ./target/release/vaca ejemplos/patrones.vaca
 ./target/release/vaca ejemplos/async.vaca
+./target/release/vaca ejemplos/concurrencia.vaca
 ./target/release/vaca ejemplos/archivos.vaca
 ./target/release/vaca ejemplos/importar.vaca
 ./target/release/vaca ejemplos/datos.vaca
 ```
 
 Consulta [`ejemplos/README.md`](ejemplos/README.md) para ver el índice completo,
-incluidos los dos ejemplos de servidor HTTP.
+incluidos los tres ejemplos de servidor HTTP.
 
 ### REPL interactivo
 
@@ -128,7 +132,14 @@ curl "http://localhost:8080/usuarios?nombre=Ana"
 curl -X POST -d '{"hola":"mundo"}' http://localhost:8080/eco
 ```
 
-Detén el servidor con `Ctrl+C`.
+Detén el servidor con `Ctrl+C`. Cada conexión se atiende en su propio hilo.
+
+Para una prueba de carga con decenas de conexiones simultáneas:
+
+```bash
+./target/release/vaca ejemplos/servidor_concurrente.vaca
+python3 scripts/probar_concurrencia.py
+```
 
 ### Instalar el comando `vaca` globalmente
 
@@ -213,6 +224,7 @@ El programa no se ejecuta en ese caso. Consulta
 cargo test                              # incluye la ejecución de todos los ejemplos
 python3 scripts/probar_servidor.py      # servidor HTTP básico (puerto 8080)
 python3 scripts/probar_api.py           # API JSON con validación (puerto 8081)
+python3 scripts/probar_concurrencia.py  # carga concurrente (puerto 8090)
 ```
 
 ### Soporte en Zed
@@ -524,6 +536,65 @@ importar "util.vaca" como util
   y se exponen como un módulo con sus funciones, constantes y variables.
 - Las importaciones se cachean y se detectan los ciclos.
 
+### Concurrencia
+
+Cada llamada a una función `async` arranca un hilo del sistema y devuelve una
+**tarea**. `esperar` bloquea hasta que la tarea termina y devuelve su
+resultado; dos tareas lanzadas seguidas se ejecutan a la vez:
+
+```vaca
+importar tiempo
+
+async fn consultar(nombre, ms) {
+    tiempo.dormir(ms)
+    retornar a"{nombre} lista"
+}
+
+a = consultar("A", 200)      # arranca en un hilo
+b = consultar("B", 200)      # arranca en otro hilo
+resultado_a = esperar a      # espera ~200 ms en total, no 400
+resultado_b = esperar b
+imprimir(resultado_a, resultado_b)
+```
+
+`esperar` también acepta valores que no son tareas y los devuelve tal cual.
+Esperar dos veces la misma tarea reutiliza el resultado ya calculado. Si la
+tarea lanza un error, `esperar` lo propaga y puede capturarse con
+`intentar`/`atrapar`.
+
+El módulo `concurrencia` añade utilidades para paralelismo y estado
+compartido:
+
+```vaca
+importar concurrencia
+
+# Lanza varias funciones a la vez y espera a todas.
+resultados = concurrencia.paralelo([procesar_a, procesar_b])
+
+# Lanza una función con argumentos en un hilo aparte.
+tarea = concurrencia.tarea(procesar, dato, 100)
+
+# Contador atómico: no pierde incrementos entre hilos.
+contador = concurrencia.contador(0)
+contador.incrementar()          # devuelve el nuevo valor
+contador.incrementar(10)
+contador.valor()
+contador.reiniciar()
+
+concurrencia.esperar_todas([tarea])
+concurrencia.hilos()            # hilos de CPU disponibles
+concurrencia.dormir(ms)
+```
+
+Los diccionarios también ofrecen `diccionario.incrementar(clave, cantidad)`
+como operación atómica, útil para métricas compartidas:
+
+```vaca
+visitas = {}
+visitas.incrementar("total")
+imprimir(visitas.get("total", 0))
+```
+
 ---
 
 ## Módulos nativos
@@ -556,6 +627,15 @@ variádicos.
 
 `sistema.env(nombre, defecto)`, `sistema.argumentos()`, `sistema.salir(codigo)`,
 `sistema.directorio()`, `sistema.plataforma()`.
+
+### `concurrencia`
+
+`tarea(funcion, ...args)`, `paralelo([funciones])`, `esperar_todas(lista)`,
+`contador(inicial)`, `incrementar(contador, cantidad)`, `valor(contador)`,
+`reiniciar(contador, valor)`, `dormir(ms)`, `hilos()`.
+
+Los contadores exponen los mismos métodos: `contador.incrementar(cantidad)`,
+`contador.valor()` y `contador.reiniciar(valor)`.
 
 ### `archivo`
 
@@ -625,8 +705,20 @@ fn manejador(peticion) {
 http.servidor(8080, manejador)
 ```
 
-Firma: `http.servidor(puerto, manejador)` o
-`http.servidor(host, puerto, manejador)`.
+Firma: `http.servidor(puerto, manejador)`,
+`http.servidor(host, puerto, manejador)`,
+`http.servidor(puerto, manejador, limite)` o
+`http.servidor(host, puerto, manejador, limite)`.
+
+Cada conexión se atiende en su propio hilo, de modo que una petición lenta no
+bloquea a las demás. `limite` es el número máximo de conexiones simultáneas
+(`0` o negativo significa ilimitado); al superarlo se responde `503` con
+`Retry-After: 1`. Si el manejador es `async fn`, el servidor espera la tarea
+antes de construir la respuesta.
+
+Como las peticiones se ejecutan a la vez, el estado global compartido debe
+usar primitivas atómicas (`concurrencia.contador` o
+`diccionario.incrementar`) para evitar carreras en contadores.
 
 La petición que recibe el manejador es un diccionario:
 
@@ -668,6 +760,28 @@ Solo se admite `http://`; para HTTPS usa un proxy inverso con TLS.
 También hay `http.codificar_url`, `http.decodificar_url` y
 `http.estado(codigo)`.
 
+#### Laboratorio de estrés
+
+`ejemplos/servidor_concurrente.vaca` está pensado para pruebas de carga:
+
+```bash
+cargo build --release
+./target/release/vaca ejemplos/servidor_concurrente.vaca
+python3 scripts/probar_concurrencia.py
+```
+
+Rutas disponibles: `/salud`, `/metricas`, `/lento?ms=...` y `POST /eco`. El
+script lanza 50 peticiones de 200 ms a la vez y verifica que terminan en
+~0,2 s, además de comprobar que los contadores atómicos no pierden
+incrementos y que las peticiones concurrentes reciben identificadores únicos.
+
+Cada conexión reserva 8 MiB de pila virtual, así que limita las conexiones
+simultáneas para proteger el proceso frente a slowloris o picos de carga:
+
+```vaca
+http.servidor("0.0.0.0", 8090, manejador, 1000)
+```
+
 ---
 
 ## Estructura del proyecto
@@ -693,6 +807,7 @@ src/
     cadenas.rs      Texto
     tiempo.rs       Reloj y fechas
     sistema.rs      Entorno y proceso
+    concurrencia.rs Tareas, contadores atómicos e hilos
 ejemplos/           Programas de ejemplo
 tests/              Pruebas de lenguaje e integración
 scripts/            Prueba de humo de los servidores HTTP
@@ -723,7 +838,7 @@ editor/             Extensión de Zed
 | 7 | POO: clases, herencia, `este`, `iniciar`, abstracción | Completa |
 | 8 | Módulos JSON, HTTP, mate, tiempo, sistema, archivos | Completa |
 | 9 | DataFrames y CSV | Completa |
-| 10 | `async`/`await` y concurrencia real | **Parcial**: la gramática existe, pero la ejecución es síncrona y el servidor atiende una conexión a la vez |
+| 10 | `async`/`await` y concurrencia real | Completa |
 | 11 | CLI, REPL, tokens y AST | **Parcial**: extensión de Zed y kit de empaquetado completos; faltan formateador y gestor de paquetes |
 | 12 | Type checker, optimizaciones, GC | **Parcial**: análisis semántico de variables no usadas; faltan comprobación de tipos, optimizaciones y GC |
 
@@ -733,10 +848,17 @@ editor/             Extensión de Zed
 
 - **Intérprete de árbol, no bytecode.** Es más simple y suficiente para
   scripts y APIs pequeñas, pero más lento que una VM.
-- **Sin concurrencia real.** `async fn` y `esperar`/`await` se aceptan y
-  ejecutan de forma síncrona. `http.servidor` procesa una petición a la vez.
-  Para producción concurrente, ejecuta varias instancias detrás de un proxy
-  inverso o amplía el runtime con `tokio`.
+- **Concurrencia basada en hilos del sistema.** Cada `async fn` y cada
+  conexión HTTP crea un hilo (8 MiB de pila reservada). Es concurrencia real y
+  suficiente para un laboratorio de estrés o una API moderada, pero no es un
+  event loop: miles de tareas simultáneas consumen memoria. Para cargas
+  masivas, usa `http.servidor(..., limite)` o reparte la carga entre varias
+  instancias. No se usan `tokio` ni dependencias externas.
+- **Sin recolector de basura.** Listas, diccionarios e instancias usan
+  `Arc`/`Mutex`; los ciclos de referencias no se liberan automáticamente.
+- **No esperes una tarea desde dentro de sí misma.** `esperar` sobre la tarea
+  que se está ejecutando en el hilo actual bloquearía ese hilo para siempre.
+  Lanza la tarea desde otro hilo o no la esperes dentro de su propio cuerpo.
 - **Anotaciones de tipo informativas.** `x: Entero = 0` se acepta, pero el
   intérprete no realiza comprobación estática de tipos; el tipado es dinámico.
   El análisis semántico actual solo comprueba variables locales no usadas.
@@ -757,7 +879,7 @@ editor/             Extensión de Zed
 ## Próximos pasos razonables
 
 1. Compilar el AST a bytecode y añadir una VM con pila.
-2. Integrar `tokio` para `async`/`await` real y servidor concurrente.
+2. Pool de hilos acotado o event loop para reducir el coste por tarea.
 3. Analizador semántico opcional que valide las anotaciones de tipo.
 4. Formateador (`vaca fmt`) y gestor de paquetes.
 5. Extensiones de editor para resaltado y autocompletado.

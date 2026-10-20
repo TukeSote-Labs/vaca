@@ -44,7 +44,7 @@ fn nativa(nombre: &'static str, min: usize, max: usize, funcion: crate::value::N
 
 fn unir(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     let lista = match &args[0] {
-        Value::Lista(l) => l.borrow().clone(),
+        Value::Lista(l) => l.lock().unwrap().clone(),
         otro => {
             return Err(Error::ejecucion(format!(
                 "'cadenas.unir' espera una lista y recibió {}",

@@ -71,7 +71,7 @@ fn leer_marco(valor: &Value, nombre: &str) -> Result<Marco, Error> {
             )))
         }
     };
-    let dict = dict.borrow();
+    let dict = dict.lock().unwrap();
     let columnas_valor = dict.get("columnas").ok_or_else(|| {
         Error::ejecucion(format!(
             "'{}' recibió un diccionario sin 'columnas'",
@@ -82,15 +82,21 @@ fn leer_marco(valor: &Value, nombre: &str) -> Result<Marco, Error> {
         Error::ejecucion(format!("'{}' recibió un diccionario sin 'filas'", nombre))
     })?;
     let columnas = match columnas_valor {
-        Value::Lista(l) => l.borrow().iter().map(|v| v.a_texto()).collect::<Vec<_>>(),
+        Value::Lista(l) => l
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|v| v.a_texto())
+            .collect::<Vec<_>>(),
         _ => return Err(Error::ejecucion("'columnas' debe ser una lista de textos")),
     };
     let filas = match filas_valor {
         Value::Lista(l) => l
-            .borrow()
+            .lock()
+            .unwrap()
             .iter()
             .map(|fila| match fila {
-                Value::Lista(celdas) => Ok(celdas.borrow().clone()),
+                Value::Lista(celdas) => Ok(celdas.lock().unwrap().clone()),
                 _ => Err(Error::ejecucion("cada fila debe ser una lista")),
             })
             .collect::<Result<Vec<_>, Error>>()?,
@@ -533,7 +539,7 @@ fn a_json(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
 
 fn desde_json(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     let lista = match &args[0] {
-        Value::Lista(l) => l.borrow().clone(),
+        Value::Lista(l) => l.lock().unwrap().clone(),
         otro => {
             return Err(Error::ejecucion(format!(
                 "'desde_json' espera una lista de diccionarios y recibió {}",
@@ -547,7 +553,7 @@ fn desde_json(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     let mut filas_crudas: Vec<HashMap<String, Value>> = Vec::new();
     for elemento in &lista {
         let dict = match elemento {
-            Value::Diccionario(d) => d.borrow().clone(),
+            Value::Diccionario(d) => d.lock().unwrap().clone(),
             otro => {
                 return Err(Error::ejecucion(format!(
                     "cada elemento debe ser un diccionario, se encontró {}",
@@ -615,7 +621,12 @@ fn unir(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
 fn seleccionar(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     let marco = leer_marco(&args[0], "seleccionar")?;
     let nombres = match &args[1] {
-        Value::Lista(l) => l.borrow().iter().map(|v| v.a_texto()).collect::<Vec<_>>(),
+        Value::Lista(l) => l
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|v| v.a_texto())
+            .collect::<Vec<_>>(),
         otro => {
             return Err(Error::ejecucion(format!(
                 "'seleccionar' espera una lista de nombres y recibió {}",

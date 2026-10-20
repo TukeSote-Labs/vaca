@@ -1,11 +1,11 @@
 //! Intérprete de Árbol (tree-walking) de Vaca.
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::sync::atomic::AtomicI64;
+use std::sync::{Arc, Mutex};
 
 use crate::ast::{Expr, MetodoClase, OpBinario, OpUnario, Stmt};
 use crate::error::Error;
@@ -13,7 +13,7 @@ use crate::modulos;
 use crate::parser::Parser;
 use crate::value::{
     clave_texto, comparar_orden, valor_verdadero, valores_iguales, Clase, Funcion, Instancia,
-    Modulo, Value,
+    Modulo, Tarea, Value,
 };
 
 // ----------------------------------------------------------------------
@@ -23,12 +23,12 @@ use crate::value::{
 pub struct Entorno {
     pub valores: HashMap<String, Value>,
     constantes: HashSet<String>,
-    pub padre: Option<Rc<RefCell<Entorno>>>,
+    pub padre: Option<Arc<Mutex<Entorno>>>,
 }
 
 impl Entorno {
-    pub fn nuevo(padre: Option<Rc<RefCell<Entorno>>>) -> Rc<RefCell<Entorno>> {
-        Rc::new(RefCell::new(Entorno {
+    pub fn nuevo(padre: Option<Arc<Mutex<Entorno>>>) -> Arc<Mutex<Entorno>> {
+        Arc::new(Mutex::new(Entorno {
             valores: HashMap::new(),
             constantes: HashSet::new(),
             padre,
@@ -45,17 +45,17 @@ impl Entorno {
         self.valores.insert(nombre, valor);
     }
 
-    pub fn obtener(entorno: &Rc<RefCell<Entorno>>, nombre: &str) -> Option<Value> {
+    pub fn obtener(entorno: &Arc<Mutex<Entorno>>, nombre: &str) -> Option<Value> {
         let (valor, padre) = {
-            let e = entorno.borrow();
+            let e = entorno.lock().unwrap();
             (e.valores.get(nombre).cloned(), e.padre.clone())
         };
         valor.or_else(|| padre.and_then(|p| Entorno::obtener(&p, nombre)))
     }
 
-    pub fn asignar(entorno: &Rc<RefCell<Entorno>>, nombre: &str, valor: Value) -> bool {
+    pub fn asignar(entorno: &Arc<Mutex<Entorno>>, nombre: &str, valor: Value) -> bool {
         let padre = {
-            let mut e = entorno.borrow_mut();
+            let mut e = entorno.lock().unwrap();
             if e.constantes.contains(nombre) {
                 return false;
             }
@@ -68,9 +68,9 @@ impl Entorno {
         padre.is_some_and(|p| Entorno::asignar(&p, nombre, valor))
     }
 
-    pub fn es_constante(entorno: &Rc<RefCell<Entorno>>, nombre: &str) -> bool {
+    pub fn es_constante(entorno: &Arc<Mutex<Entorno>>, nombre: &str) -> bool {
         let padre = {
-            let e = entorno.borrow();
+            let e = entorno.lock().unwrap();
             if e.constantes.contains(nombre) {
                 return true;
             }
@@ -92,12 +92,16 @@ enum Flujo {
 // Intérprete
 // ----------------------------------------------------------------------
 
-pub struct Interprete {
-    pub global: Rc<RefCell<Entorno>>,
-    pub max_profundidad: usize,
-    profundidad: usize,
+pub struct Salida {
     pub capturar: bool,
     pub buffer: String,
+}
+
+pub struct Interprete {
+    pub global: Arc<Mutex<Entorno>>,
+    pub max_profundidad: usize,
+    profundidad: usize,
+    pub salida: Arc<Mutex<Salida>>,
     pub ruta_base: PathBuf,
     pub argumentos: Vec<String>,
     pub codigo_salida: Option<i32>,
@@ -112,8 +116,10 @@ impl Interprete {
             global,
             max_profundidad: 64,
             profundidad: 0,
-            capturar: false,
-            buffer: String::new(),
+            salida: Arc::new(Mutex::new(Salida {
+                capturar: false,
+                buffer: String::new(),
+            })),
             ruta_base: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             argumentos: Vec::new(),
             codigo_salida: None,
@@ -125,14 +131,31 @@ impl Interprete {
     }
 
     pub fn con_captura() -> Self {
-        let mut interprete = Interprete::nuevo();
-        interprete.capturar = true;
+        let interprete = Interprete::nuevo();
+        interprete.salida.lock().unwrap().capturar = true;
         interprete
     }
 
+    /// Crea un intérprete para un hilo de trabajo que comparte el entorno
+    /// global, la salida y la configuración, pero con su propia pila.
+    pub fn crear_tarea(&self) -> Interprete {
+        Interprete {
+            global: Arc::clone(&self.global),
+            max_profundidad: self.max_profundidad,
+            profundidad: 0,
+            salida: Arc::clone(&self.salida),
+            ruta_base: self.ruta_base.clone(),
+            argumentos: self.argumentos.clone(),
+            codigo_salida: None,
+            modulos_archivo: HashMap::new(),
+            importando: HashSet::new(),
+        }
+    }
+
     pub fn escribir(&mut self, texto: &str) {
-        if self.capturar {
-            self.buffer.push_str(texto);
+        let mut salida = self.salida.lock().unwrap();
+        if salida.capturar {
+            salida.buffer.push_str(texto);
         } else {
             print!("{}", texto);
             let _ = io::stdout().flush();
@@ -140,12 +163,18 @@ impl Interprete {
     }
 
     pub fn escribir_linea(&mut self, texto: &str) {
-        self.escribir(texto);
-        self.escribir("\n");
+        let mut salida = self.salida.lock().unwrap();
+        if salida.capturar {
+            salida.buffer.push_str(texto);
+            salida.buffer.push('\n');
+        } else {
+            println!("{}", texto);
+        }
     }
 
     pub fn tomar_salida(&mut self) -> String {
-        std::mem::take(&mut self.buffer)
+        let mut salida = self.salida.lock().unwrap();
+        std::mem::take(&mut salida.buffer)
     }
 
     fn registrar_globales(&mut self) {
@@ -165,7 +194,8 @@ impl Interprete {
         ];
         for (nombre, min, max, funcion) in nativas {
             self.global
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .definir(nombre, Value::nativa(nombre, min, max, funcion));
         }
     }
@@ -227,14 +257,21 @@ impl Interprete {
     /// Ejecuta el análisis semántico usando los nombres ya definidos en el
     /// entorno global (builtins, REPL y ejecuciones anteriores).
     fn analizar(&self, programa: &[Stmt]) -> Result<(), Error> {
-        let conocidos: Vec<String> = self.global.borrow().valores.keys().cloned().collect();
+        let conocidos: Vec<String> = self
+            .global
+            .lock()
+            .unwrap()
+            .valores
+            .keys()
+            .cloned()
+            .collect();
         crate::analizador::analizar(programa, &conocidos)
     }
 
     fn ejecutar_lista(
         &mut self,
         sentencias: &[Stmt],
-        entorno: &Rc<RefCell<Entorno>>,
+        entorno: &Arc<Mutex<Entorno>>,
     ) -> Result<Flujo, Error> {
         for stmt in sentencias {
             match self.ejecutar_stmt(stmt, entorno)? {
@@ -248,7 +285,7 @@ impl Interprete {
     fn ejecutar_bloque(
         &mut self,
         sentencias: &[Stmt],
-        padre: &Rc<RefCell<Entorno>>,
+        padre: &Arc<Mutex<Entorno>>,
     ) -> Result<Flujo, Error> {
         self.ejecutar_en_ambito(sentencias, padre, None)
     }
@@ -256,22 +293,18 @@ impl Interprete {
     fn ejecutar_en_ambito(
         &mut self,
         sentencias: &[Stmt],
-        padre: &Rc<RefCell<Entorno>>,
+        padre: &Arc<Mutex<Entorno>>,
         predefinir: Option<(&str, Value)>,
     ) -> Result<Flujo, Error> {
         let entorno = Entorno::nuevo(Some(padre.clone()));
         if let Some((nombre, valor)) = predefinir {
-            entorno.borrow_mut().definir(nombre, valor);
+            entorno.lock().unwrap().definir(nombre, valor);
         }
         self.hoistar(sentencias, &entorno)?;
         self.ejecutar_lista(sentencias, &entorno)
     }
 
-    fn hoistar(
-        &mut self,
-        sentencias: &[Stmt],
-        entorno: &Rc<RefCell<Entorno>>,
-    ) -> Result<(), Error> {
+    fn hoistar(&mut self, sentencias: &[Stmt], entorno: &Arc<Mutex<Entorno>>) -> Result<(), Error> {
         // Primero funciones, para permitir llamadas mutuas.
         for stmt in sentencias {
             if let Stmt::Funcion {
@@ -289,8 +322,9 @@ impl Interprete {
                     es_async: *es_async,
                 };
                 entorno
-                    .borrow_mut()
-                    .definir(nombre.clone(), Value::Funcion(Rc::new(funcion)));
+                    .lock()
+                    .unwrap()
+                    .definir(nombre.clone(), Value::Funcion(Arc::new(funcion)));
             }
         }
 
@@ -322,8 +356,9 @@ impl Interprete {
                 };
                 let clase = self.construir_clase(nombre, padre_valor, metodos, entorno);
                 entorno
-                    .borrow_mut()
-                    .definir(nombre.clone(), Value::Clase(Rc::new(clase)));
+                    .lock()
+                    .unwrap()
+                    .definir(nombre.clone(), Value::Clase(Arc::new(clase)));
             }
         }
         Ok(())
@@ -332,9 +367,9 @@ impl Interprete {
     fn construir_clase(
         &mut self,
         nombre: &str,
-        padre: Option<Rc<Clase>>,
+        padre: Option<Arc<Clase>>,
         metodos: &[MetodoClase],
-        entorno: &Rc<RefCell<Entorno>>,
+        entorno: &Arc<Mutex<Entorno>>,
     ) -> Clase {
         let mut mapa = HashMap::new();
         for metodo in metodos {
@@ -345,7 +380,7 @@ impl Interprete {
                 entorno: entorno.clone(),
                 es_async: metodo.es_async,
             };
-            mapa.insert(metodo.nombre.clone(), Rc::new(funcion));
+            mapa.insert(metodo.nombre.clone(), Arc::new(funcion));
         }
         Clase {
             nombre: nombre.to_string(),
@@ -357,7 +392,7 @@ impl Interprete {
     fn ejecutar_stmt(
         &mut self,
         stmt: &Stmt,
-        entorno: &Rc<RefCell<Entorno>>,
+        entorno: &Arc<Mutex<Entorno>>,
     ) -> Result<Flujo, Error> {
         match stmt {
             Stmt::Expresion(expr) => {
@@ -378,7 +413,8 @@ impl Interprete {
                 }
                 let valor = self.evaluar(valor, entorno)?;
                 entorno
-                    .borrow_mut()
+                    .lock()
+                    .unwrap()
                     .definir_constante(nombre.clone(), valor);
                 Ok(Flujo::Normal)
             }
@@ -453,7 +489,8 @@ impl Interprete {
                         break;
                     }
                     entorno_bucle
-                        .borrow_mut()
+                        .lock()
+                        .unwrap()
                         .definir(variable.clone(), Value::Entero(i));
                     match self.ejecutar_bloque(cuerpo, &entorno_bucle)? {
                         Flujo::Normal | Flujo::Continuar => {}
@@ -474,12 +511,13 @@ impl Interprete {
             } => {
                 let iterable = self.evaluar(iterable, entorno)?;
                 let elementos: Vec<Value> = match &iterable {
-                    Value::Lista(lista) => lista.borrow().clone(),
+                    Value::Lista(lista) => lista.lock().unwrap().clone(),
                     Value::Texto(texto) => {
                         texto.chars().map(|c| Value::Texto(c.to_string())).collect()
                     }
                     Value::Diccionario(dict) => {
-                        let mut claves: Vec<String> = dict.borrow().keys().cloned().collect();
+                        let mut claves: Vec<String> =
+                            dict.lock().unwrap().keys().cloned().collect();
                         claves.sort();
                         claves.into_iter().map(Value::Texto).collect()
                     }
@@ -493,7 +531,8 @@ impl Interprete {
                 let entorno_bucle = Entorno::nuevo(Some(entorno.clone()));
                 for elemento in elementos {
                     entorno_bucle
-                        .borrow_mut()
+                        .lock()
+                        .unwrap()
                         .definir(variable.clone(), elemento);
                     match self.ejecutar_bloque(cuerpo, &entorno_bucle)? {
                         Flujo::Normal | Flujo::Continuar => {}
@@ -547,7 +586,7 @@ impl Interprete {
         &mut self,
         objetivo: &Expr,
         valor: Value,
-        entorno: &Rc<RefCell<Entorno>>,
+        entorno: &Arc<Mutex<Entorno>>,
     ) -> Result<(), Error> {
         match objetivo {
             Expr::Variable(nombre) => {
@@ -558,7 +597,7 @@ impl Interprete {
                     )));
                 }
                 if !Entorno::asignar(entorno, nombre, valor.clone()) {
-                    entorno.borrow_mut().definir(nombre.clone(), valor);
+                    entorno.lock().unwrap().definir(nombre.clone(), valor);
                 }
                 Ok(())
             }
@@ -566,11 +605,15 @@ impl Interprete {
                 let obj = self.evaluar(objeto, entorno)?;
                 match obj {
                     Value::Instancia(instancia) => {
-                        instancia.borrow_mut().campos.insert(nombre.clone(), valor);
+                        instancia
+                            .lock()
+                            .unwrap()
+                            .campos
+                            .insert(nombre.clone(), valor);
                         Ok(())
                     }
                     Value::Diccionario(dict) => {
-                        dict.borrow_mut().insert(nombre.clone(), valor);
+                        dict.lock().unwrap().insert(nombre.clone(), valor);
                         Ok(())
                     }
                     otro => Err(Error::ejecucion(format!(
@@ -585,12 +628,12 @@ impl Interprete {
                 let idx = self.evaluar(indice, entorno)?;
                 match obj {
                     Value::Lista(lista) => {
-                        let posicion = indice_de_lista(&idx, lista.borrow().len())?;
-                        lista.borrow_mut()[posicion] = valor;
+                        let posicion = indice_de_lista(&idx, lista.lock().unwrap().len())?;
+                        lista.lock().unwrap()[posicion] = valor;
                         Ok(())
                     }
                     Value::Diccionario(dict) => {
-                        dict.borrow_mut().insert(clave_texto(&idx), valor);
+                        dict.lock().unwrap().insert(clave_texto(&idx), valor);
                         Ok(())
                     }
                     otro => Err(Error::ejecucion(format!(
@@ -609,7 +652,7 @@ impl Interprete {
     // Evaluación de expresiones
     // ------------------------------------------------------------------
 
-    fn evaluar(&mut self, expr: &Expr, entorno: &Rc<RefCell<Entorno>>) -> Result<Value, Error> {
+    fn evaluar(&mut self, expr: &Expr, entorno: &Arc<Mutex<Entorno>>) -> Result<Value, Error> {
         match expr {
             Expr::Entero(n) => Ok(Value::Entero(*n)),
             Expr::Decimal(n) => Ok(Value::Decimal(*n)),
@@ -710,12 +753,12 @@ impl Interprete {
                 let indice = self.evaluar(indice, entorno)?;
                 match objeto {
                     Value::Lista(lista) => {
-                        let posicion = indice_de_lista(&indice, lista.borrow().len())?;
-                        Ok(lista.borrow()[posicion].clone())
+                        let posicion = indice_de_lista(&indice, lista.lock().unwrap().len())?;
+                        Ok(lista.lock().unwrap()[posicion].clone())
                     }
                     Value::Diccionario(dict) => {
                         let clave = clave_texto(&indice);
-                        let valor = dict.borrow().get(&clave).cloned();
+                        let valor = dict.lock().unwrap().get(&clave).cloned();
                         Ok(valor.unwrap_or(Value::Nulo))
                     }
                     Value::Texto(texto) => {
@@ -748,14 +791,20 @@ impl Interprete {
                 parametros,
                 cuerpo,
                 es_async,
-            } => Ok(Value::Funcion(Rc::new(Funcion {
+            } => Ok(Value::Funcion(Arc::new(Funcion {
                 nombre: nombre.clone().unwrap_or_default(),
                 parametros: parametros.clone(),
                 cuerpo: cuerpo.clone(),
                 entorno: entorno.clone(),
                 es_async: *es_async,
             }))),
-            Expr::Esperar(expr) => self.evaluar(expr, entorno),
+            Expr::Esperar(expr) => {
+                let valor = self.evaluar(expr, entorno)?;
+                match valor {
+                    Value::Tarea(tarea) => tarea.esperar(),
+                    otro => Ok(otro),
+                }
+            }
         }
     }
 
@@ -767,8 +816,8 @@ impl Interprete {
                     .map(Value::Entero)
                     .ok_or_else(|| Error::ejecucion("desbordamiento al sumar enteros")),
                 (Value::Lista(a), Value::Lista(b)) => {
-                    let mut resultado = a.borrow().clone();
-                    resultado.extend(b.borrow().iter().cloned());
+                    let mut resultado = a.lock().unwrap().clone();
+                    resultado.extend(b.lock().unwrap().iter().cloned());
                     Ok(Value::lista(resultado))
                 }
                 (Value::Texto(_), _) | (_, Value::Texto(_)) => {
@@ -886,7 +935,42 @@ impl Interprete {
         }
     }
 
-    fn llamar_funcion(&mut self, funcion: &Rc<Funcion>, args: Vec<Value>) -> Result<Value, Error> {
+    fn llamar_funcion(&mut self, funcion: &Arc<Funcion>, args: Vec<Value>) -> Result<Value, Error> {
+        if funcion.es_async {
+            return self.iniciar_tarea(funcion.clone(), args);
+        }
+        self.llamar_funcion_sincrona(funcion, args)
+    }
+
+    fn iniciar_tarea(&mut self, funcion: Arc<Funcion>, args: Vec<Value>) -> Result<Value, Error> {
+        let mut trabajador = self.crear_tarea();
+        let handle = std::thread::Builder::new()
+            .name("vaca-tarea".to_string())
+            .stack_size(8 * 1024 * 1024)
+            .spawn(move || trabajador.llamar_funcion_sincrona(&funcion, args))
+            .map_err(|error| Error::ejecucion(format!("no se pudo iniciar la tarea: {}", error)))?;
+        Ok(Value::Tarea(Arc::new(Tarea::nueva(handle))))
+    }
+
+    /// Ejecuta cualquier valor llamable en un hilo nuevo y devuelve una tarea.
+    pub fn crear_tarea_llamada(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, Error> {
+        let mut trabajador = self.crear_tarea();
+        let handle = std::thread::Builder::new()
+            .name("vaca-tarea".to_string())
+            .stack_size(8 * 1024 * 1024)
+            .spawn(move || match &callee {
+                Value::Funcion(funcion) => trabajador.llamar_funcion_sincrona(funcion, args),
+                otro => trabajador.llamar(otro.clone(), args),
+            })
+            .map_err(|error| Error::ejecucion(format!("no se pudo iniciar la tarea: {}", error)))?;
+        Ok(Value::Tarea(Arc::new(Tarea::nueva(handle))))
+    }
+
+    pub(crate) fn llamar_funcion_sincrona(
+        &mut self,
+        funcion: &Arc<Funcion>,
+        args: Vec<Value>,
+    ) -> Result<Value, Error> {
         let requeridos = funcion
             .parametros
             .iter()
@@ -929,7 +1013,8 @@ impl Interprete {
                     }
                 };
                 entorno
-                    .borrow_mut()
+                    .lock()
+                    .unwrap()
                     .definir(parametro.nombre.clone(), valor);
             }
             self.hoistar(&funcion.cuerpo, &entorno)?;
@@ -945,13 +1030,18 @@ impl Interprete {
         }
     }
 
-    fn instanciar(&mut self, clase: Rc<Clase>, args: Vec<Value>) -> Result<Value, Error> {
-        let instancia = Rc::new(RefCell::new(Instancia {
+    fn instanciar(&mut self, clase: Arc<Clase>, args: Vec<Value>) -> Result<Value, Error> {
+        let instancia = Arc::new(Mutex::new(Instancia {
             clase: clase.clone(),
             campos: HashMap::new(),
         }));
         let valor = Value::Instancia(instancia.clone());
         if let Some(iniciar) = buscar_metodo(&clase, "iniciar") {
+            if iniciar.es_async {
+                return Err(Error::ejecucion(
+                    "el constructor 'iniciar' no puede ser async",
+                ));
+            }
             self.ejecutar_metodo(instancia.clone(), &iniciar, args)?;
         } else if !args.is_empty() {
             return Err(Error::ejecucion(format!(
@@ -964,15 +1054,16 @@ impl Interprete {
 
     fn ejecutar_metodo(
         &mut self,
-        instancia: Rc<RefCell<Instancia>>,
-        metodo: &Rc<Funcion>,
+        instancia: Arc<Mutex<Instancia>>,
+        metodo: &Arc<Funcion>,
         args: Vec<Value>,
     ) -> Result<Value, Error> {
         let entorno = Entorno::nuevo(Some(metodo.entorno.clone()));
         entorno
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .definir("este", Value::Instancia(instancia));
-        let vinculada = Rc::new(Funcion {
+        let vinculada = Arc::new(Funcion {
             nombre: metodo.nombre.clone(),
             parametros: metodo.parametros.clone(),
             cuerpo: metodo.cuerpo.clone(),
@@ -985,16 +1076,17 @@ impl Interprete {
     fn obtener_miembro(&mut self, objeto: Value, nombre: &str) -> Result<Value, Error> {
         match objeto {
             Value::Instancia(instancia) => {
-                if let Some(valor) = instancia.borrow().campos.get(nombre).cloned() {
+                if let Some(valor) = instancia.lock().unwrap().campos.get(nombre).cloned() {
                     return Ok(valor);
                 }
-                let clase = instancia.borrow().clase.clone();
+                let clase = instancia.lock().unwrap().clase.clone();
                 if let Some(metodo) = buscar_metodo(&clase, nombre) {
                     let entorno = Entorno::nuevo(Some(metodo.entorno.clone()));
                     entorno
-                        .borrow_mut()
+                        .lock()
+                        .unwrap()
                         .definir("este", Value::Instancia(instancia));
-                    return Ok(Value::Funcion(Rc::new(Funcion {
+                    return Ok(Value::Funcion(Arc::new(Funcion {
                         nombre: metodo.nombre.clone(),
                         parametros: metodo.parametros.clone(),
                         cuerpo: metodo.cuerpo.clone(),
@@ -1008,7 +1100,7 @@ impl Interprete {
                 )))
             }
             Value::Diccionario(dict) => {
-                let valor = dict.borrow().get(nombre).cloned();
+                let valor = dict.lock().unwrap().get(nombre).cloned();
                 Ok(valor.unwrap_or(Value::Nulo))
             }
             Value::Modulo(modulo) => modulo.miembros.get(nombre).cloned().ok_or_else(|| {
@@ -1021,7 +1113,9 @@ impl Interprete {
             | Value::Texto(_)
             | Value::Entero(_)
             | Value::Decimal(_)
-            | Value::Logico(_)) => Ok(Value::MetodoNativo(Rc::new((otro, nombre.to_string())))),
+            | Value::Logico(_)
+            | Value::Tarea(_)
+            | Value::Contador(_)) => Ok(Value::MetodoNativo(Arc::new((otro, nombre.to_string())))),
             otro => Err(Error::ejecucion(format!(
                 "un valor de tipo {} no tiene miembros",
                 otro.tipo_nombre()
@@ -1037,7 +1131,7 @@ impl Interprete {
     ) -> Result<Value, Error> {
         match receptor {
             Value::Instancia(instancia) => {
-                if let Some(campo) = instancia.borrow().campos.get(nombre).cloned() {
+                if let Some(campo) = instancia.lock().unwrap().campos.get(nombre).cloned() {
                     if campo.es_llamable() {
                         return self.llamar(campo, args);
                     }
@@ -1046,7 +1140,7 @@ impl Interprete {
                         nombre
                     )));
                 }
-                let clase = instancia.borrow().clase.clone();
+                let clase = instancia.lock().unwrap().clase.clone();
                 if let Some(metodo) = buscar_metodo(&clase, nombre) {
                     return self.ejecutar_metodo(instancia, &metodo, args);
                 }
@@ -1065,7 +1159,7 @@ impl Interprete {
                 self.llamar(miembro, args)
             }
             Value::Diccionario(dict) => {
-                if let Some(campo) = dict.borrow().get(nombre).cloned() {
+                if let Some(campo) = dict.lock().unwrap().get(nombre).cloned() {
                     if campo.es_llamable() {
                         return self.llamar(campo, args);
                     }
@@ -1097,6 +1191,8 @@ impl Interprete {
             Value::Entero(n) => self.metodo_numero(Value::Entero(n), nombre, args),
             Value::Decimal(n) => self.metodo_numero(Value::Decimal(n), nombre, args),
             Value::Logico(b) => self.metodo_numero(Value::Logico(b), nombre, args),
+            Value::Tarea(tarea) => self.metodo_tarea(tarea, nombre, args),
+            Value::Contador(contador) => self.metodo_contador(contador, nombre, args),
             otro => Err(Error::ejecucion(format!(
                 "un valor de tipo {} no tiene el método '{}'",
                 otro.tipo_nombre(),
@@ -1105,16 +1201,85 @@ impl Interprete {
         }
     }
 
+    fn metodo_tarea(
+        &mut self,
+        tarea: Arc<Tarea>,
+        nombre: &str,
+        args: Vec<Value>,
+    ) -> Result<Value, Error> {
+        match nombre {
+            "esperar" | "aguardar" => {
+                verificar_aridad("esperar", 0, 0, &args)?;
+                tarea.esperar()
+            }
+            otro => Err(Error::ejecucion(format!(
+                "una tarea no tiene el método '{}'",
+                otro
+            ))),
+        }
+    }
+
+    fn metodo_contador(
+        &mut self,
+        contador: Arc<AtomicI64>,
+        nombre: &str,
+        args: Vec<Value>,
+    ) -> Result<Value, Error> {
+        match nombre {
+            "incrementar" | "sumar" => {
+                verificar_aridad("incrementar", 0, 1, &args)?;
+                let cantidad = match args.first() {
+                    Some(valor) => valor.a_entero_exacto().ok_or_else(|| {
+                        Error::ejecucion("la cantidad del contador debe ser un entero")
+                    })?,
+                    None => 1,
+                };
+                let nuevo =
+                    contador.fetch_add(cantidad, std::sync::atomic::Ordering::SeqCst) + cantidad;
+                Ok(Value::Entero(nuevo))
+            }
+            "valor" | "actual" => {
+                verificar_aridad("valor", 0, 0, &args)?;
+                Ok(Value::Entero(
+                    contador.load(std::sync::atomic::Ordering::SeqCst),
+                ))
+            }
+            "reiniciar" => {
+                verificar_aridad("reiniciar", 0, 1, &args)?;
+                let valor = match args.first() {
+                    Some(valor) => valor.a_entero_exacto().ok_or_else(|| {
+                        Error::ejecucion("el valor del contador debe ser un entero")
+                    })?,
+                    None => 0,
+                };
+                contador.store(valor, std::sync::atomic::Ordering::SeqCst);
+                Ok(Value::Entero(valor))
+            }
+            "a_texto" => {
+                verificar_aridad("a_texto", 0, 0, &args)?;
+                Ok(Value::Texto(
+                    contador
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                        .to_string(),
+                ))
+            }
+            otro => Err(Error::ejecucion(format!(
+                "un contador no tiene el método '{}'",
+                otro
+            ))),
+        }
+    }
+
     fn metodo_lista(
         &mut self,
-        lista: Rc<RefCell<Vec<Value>>>,
+        lista: Arc<Mutex<Vec<Value>>>,
         nombre: &str,
         args: Vec<Value>,
     ) -> Result<Value, Error> {
         match nombre {
             "agregar" | "añadir" | "push" => {
                 verificar_aridad("agregar", 1, 1, &args)?;
-                lista.borrow_mut().push(args[0].clone());
+                lista.lock().unwrap().push(args[0].clone());
                 Ok(Value::Nulo)
             }
             "insertar" => {
@@ -1122,44 +1287,47 @@ impl Interprete {
                 let indice = args[0].a_entero_exacto().ok_or_else(|| {
                     Error::ejecucion("el índice de 'insertar' debe ser un entero")
                 })?;
-                let len = lista.borrow().len();
+                let len = lista.lock().unwrap().len();
                 if indice < 0 || indice as usize > len {
                     return Err(Error::ejecucion(format!(
                         "índice {} fuera de rango para insertar (longitud {})",
                         indice, len
                     )));
                 }
-                lista.borrow_mut().insert(indice as usize, args[1].clone());
+                lista
+                    .lock()
+                    .unwrap()
+                    .insert(indice as usize, args[1].clone());
                 Ok(Value::Nulo)
             }
             "eliminar" => {
                 verificar_aridad("eliminar", 1, 1, &args)?;
-                let posicion = indice_de_lista(&args[0], lista.borrow().len())?;
-                let valor = lista.borrow_mut().remove(posicion);
+                let posicion = indice_de_lista(&args[0], lista.lock().unwrap().len())?;
+                let valor = lista.lock().unwrap().remove(posicion);
                 Ok(valor)
             }
             "pop" => {
                 verificar_aridad("pop", 0, 0, &args)?;
-                let valor = lista.borrow_mut().pop().unwrap_or(Value::Nulo);
+                let valor = lista.lock().unwrap().pop().unwrap_or(Value::Nulo);
                 Ok(valor)
             }
             "limpiar" => {
                 verificar_aridad("limpiar", 0, 0, &args)?;
-                lista.borrow_mut().clear();
+                lista.lock().unwrap().clear();
                 Ok(Value::Nulo)
             }
             "longitud" | "tamano" | "tamaño" => {
                 verificar_aridad("longitud", 0, 0, &args)?;
-                Ok(Value::Entero(lista.borrow().len() as i64))
+                Ok(Value::Entero(lista.lock().unwrap().len() as i64))
             }
             "vacia" | "vacía" => {
                 verificar_aridad("vacia", 0, 0, &args)?;
-                Ok(Value::Logico(lista.borrow().is_empty()))
+                Ok(Value::Logico(lista.lock().unwrap().is_empty()))
             }
             "unir" | "concatenar" => {
                 verificar_aridad("unir", 1, 1, &args)?;
                 let otra = match &args[0] {
-                    Value::Lista(l) => l.borrow().clone(),
+                    Value::Lista(l) => l.lock().unwrap().clone(),
                     otro => {
                         return Err(Error::ejecucion(format!(
                             "'unir' espera una lista, se recibió {}",
@@ -1167,13 +1335,13 @@ impl Interprete {
                         )))
                     }
                 };
-                let mut resultado = lista.borrow().clone();
+                let mut resultado = lista.lock().unwrap().clone();
                 resultado.extend(otra);
                 Ok(Value::lista(resultado))
             }
             "sublista" | "rebanada" => {
                 verificar_aridad("sublista", 1, 2, &args)?;
-                let elementos = lista.borrow();
+                let elementos = lista.lock().unwrap();
                 let len = elementos.len() as i64;
                 let inicio = args[0]
                     .a_entero_exacto()
@@ -1197,12 +1365,12 @@ impl Interprete {
             }
             "invertir" => {
                 verificar_aridad("invertir", 0, 0, &args)?;
-                lista.borrow_mut().reverse();
+                lista.lock().unwrap().reverse();
                 Ok(Value::Nulo)
             }
             "ordenar" => {
                 verificar_aridad("ordenar", 0, 1, &args)?;
-                let mut elementos = lista.borrow().clone();
+                let mut elementos = lista.lock().unwrap().clone();
                 if args.is_empty() {
                     elementos
                         .sort_by(|a, b| comparar_orden(a, b).unwrap_or(std::cmp::Ordering::Equal));
@@ -1242,18 +1410,23 @@ impl Interprete {
                         i += 1;
                     }
                 }
-                *lista.borrow_mut() = elementos;
+                *lista.lock().unwrap() = elementos;
                 Ok(Value::Nulo)
             }
             "contiene" => {
                 verificar_aridad("contiene", 1, 1, &args)?;
-                let contiene = lista.borrow().iter().any(|v| valores_iguales(v, &args[0]));
+                let contiene = lista
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|v| valores_iguales(v, &args[0]));
                 Ok(Value::Logico(contiene))
             }
             "indice_de" | "índice_de" => {
                 verificar_aridad("indice_de", 1, 1, &args)?;
                 let indice = lista
-                    .borrow()
+                    .lock()
+                    .unwrap()
                     .iter()
                     .position(|v| valores_iguales(v, &args[0]))
                     .map(|i| i as i64)
@@ -1262,12 +1435,12 @@ impl Interprete {
             }
             "copiar" => {
                 verificar_aridad("copiar", 0, 0, &args)?;
-                Ok(Value::lista(lista.borrow().clone()))
+                Ok(Value::lista(lista.lock().unwrap().clone()))
             }
             "mapear" => {
                 verificar_aridad("mapear", 1, 1, &args)?;
                 let funcion = args[0].clone();
-                let elementos = lista.borrow().clone();
+                let elementos = lista.lock().unwrap().clone();
                 let mut resultado = Vec::with_capacity(elementos.len());
                 for elemento in elementos {
                     resultado.push(self.llamar(funcion.clone(), vec![elemento])?);
@@ -1277,7 +1450,7 @@ impl Interprete {
             "filtrar" => {
                 verificar_aridad("filtrar", 1, 1, &args)?;
                 let funcion = args[0].clone();
-                let elementos = lista.borrow().clone();
+                let elementos = lista.lock().unwrap().clone();
                 let mut resultado = Vec::new();
                 for elemento in elementos {
                     let mantener = self.llamar(funcion.clone(), vec![elemento.clone()])?;
@@ -1291,7 +1464,7 @@ impl Interprete {
                 verificar_aridad("reducir", 2, 2, &args)?;
                 let funcion = args[0].clone();
                 let mut acumulador = args[1].clone();
-                let elementos = lista.borrow().clone();
+                let elementos = lista.lock().unwrap().clone();
                 for elemento in elementos {
                     acumulador = self.llamar(funcion.clone(), vec![acumulador, elemento])?;
                 }
@@ -1300,7 +1473,7 @@ impl Interprete {
             "para_cada" => {
                 verificar_aridad("para_cada", 1, 1, &args)?;
                 let funcion = args[0].clone();
-                let elementos = lista.borrow().clone();
+                let elementos = lista.lock().unwrap().clone();
                 for elemento in elementos {
                     self.llamar(funcion.clone(), vec![elemento])?;
                 }
@@ -1309,7 +1482,7 @@ impl Interprete {
             "buscar" => {
                 verificar_aridad("buscar", 1, 1, &args)?;
                 let funcion = args[0].clone();
-                let elementos = lista.borrow().clone();
+                let elementos = lista.lock().unwrap().clone();
                 for elemento in elementos {
                     if valor_verdadero(&self.llamar(funcion.clone(), vec![elemento.clone()])?) {
                         return Ok(elemento);
@@ -1321,7 +1494,8 @@ impl Interprete {
                 verificar_aridad("unir_texto", 1, 1, &args)?;
                 let separador = args[0].a_texto();
                 let texto = lista
-                    .borrow()
+                    .lock()
+                    .unwrap()
                     .iter()
                     .map(|v| v.a_texto())
                     .collect::<Vec<_>>()
@@ -1333,7 +1507,7 @@ impl Interprete {
                 let mut total = 0.0;
                 let mut todo_enteros = true;
                 let mut entero = 0i64;
-                for valor in lista.borrow().iter() {
+                for valor in lista.lock().unwrap().iter() {
                     match valor {
                         Value::Entero(n) => {
                             entero = entero.checked_add(*n).ok_or_else(|| {
@@ -1361,7 +1535,7 @@ impl Interprete {
             }
             "promedio" => {
                 verificar_aridad("promedio", 0, 0, &args)?;
-                let elementos = lista.borrow();
+                let elementos = lista.lock().unwrap();
                 if elementos.is_empty() {
                     return Ok(Value::Decimal(0.0));
                 }
@@ -1382,7 +1556,7 @@ impl Interprete {
 
     fn metodo_diccionario(
         &mut self,
-        dict: Rc<RefCell<HashMap<String, Value>>>,
+        dict: Arc<Mutex<HashMap<String, Value>>>,
         nombre: &str,
         args: Vec<Value>,
     ) -> Result<Value, Error> {
@@ -1390,7 +1564,7 @@ impl Interprete {
             "get" | "obtener" => {
                 verificar_aridad("get", 1, 2, &args)?;
                 let clave = clave_texto(&args[0]);
-                let valor = dict.borrow().get(&clave).cloned();
+                let valor = dict.lock().unwrap().get(&clave).cloned();
                 Ok(valor.unwrap_or_else(|| {
                     if args.len() == 2 {
                         args[1].clone()
@@ -1402,47 +1576,67 @@ impl Interprete {
             "set" | "poner" => {
                 verificar_aridad("set", 2, 2, &args)?;
                 let clave = clave_texto(&args[0]);
-                dict.borrow_mut().insert(clave, args[1].clone());
+                dict.lock().unwrap().insert(clave, args[1].clone());
                 Ok(Value::Nulo)
+            }
+            "incrementar" => {
+                verificar_aridad("incrementar", 1, 2, &args)?;
+                let clave = clave_texto(&args[0]);
+                let cantidad = match args.get(1) {
+                    Some(valor) => valor.a_entero_exacto().ok_or_else(|| {
+                        Error::ejecucion("la cantidad de 'incrementar' debe ser un entero")
+                    })?,
+                    None => 1,
+                };
+                let mut mapa = dict.lock().unwrap();
+                let actual = mapa
+                    .get(&clave)
+                    .and_then(|valor| valor.a_entero_exacto())
+                    .unwrap_or(0);
+                let nuevo = actual
+                    .checked_add(cantidad)
+                    .ok_or_else(|| Error::ejecucion("desbordamiento al incrementar el contador"))?;
+                mapa.insert(clave, Value::Entero(nuevo));
+                Ok(Value::Entero(nuevo))
             }
             "existe" | "contiene" => {
                 verificar_aridad("existe", 1, 1, &args)?;
                 let clave = clave_texto(&args[0]);
-                Ok(Value::Logico(dict.borrow().contains_key(&clave)))
+                Ok(Value::Logico(dict.lock().unwrap().contains_key(&clave)))
             }
             "eliminar" => {
                 verificar_aridad("eliminar", 1, 1, &args)?;
                 let clave = clave_texto(&args[0]);
-                let valor = dict.borrow_mut().remove(&clave);
+                let valor = dict.lock().unwrap().remove(&clave);
                 Ok(valor.unwrap_or(Value::Nulo))
             }
             "longitud" | "tamano" | "tamaño" => {
                 verificar_aridad("longitud", 0, 0, &args)?;
-                Ok(Value::Entero(dict.borrow().len() as i64))
+                Ok(Value::Entero(dict.lock().unwrap().len() as i64))
             }
             "llaves" | "claves" => {
                 verificar_aridad("llaves", 0, 0, &args)?;
-                let mut claves: Vec<String> = dict.borrow().keys().cloned().collect();
+                let mut claves: Vec<String> = dict.lock().unwrap().keys().cloned().collect();
                 claves.sort();
                 Ok(Value::lista(claves.into_iter().map(Value::Texto).collect()))
             }
             "valores" => {
                 verificar_aridad("valores", 0, 0, &args)?;
-                let mut claves: Vec<String> = dict.borrow().keys().cloned().collect();
+                let mut claves: Vec<String> = dict.lock().unwrap().keys().cloned().collect();
                 claves.sort();
                 let valores = claves
                     .into_iter()
-                    .filter_map(|k| dict.borrow().get(&k).cloned())
+                    .filter_map(|k| dict.lock().unwrap().get(&k).cloned())
                     .collect();
                 Ok(Value::lista(valores))
             }
             "items" | "elementos" => {
                 verificar_aridad("items", 0, 0, &args)?;
-                let mut claves: Vec<String> = dict.borrow().keys().cloned().collect();
+                let mut claves: Vec<String> = dict.lock().unwrap().keys().cloned().collect();
                 claves.sort();
                 let mut resultado = Vec::new();
                 for clave in claves {
-                    if let Some(valor) = dict.borrow().get(&clave).cloned() {
+                    if let Some(valor) = dict.lock().unwrap().get(&clave).cloned() {
                         resultado.push(Value::lista(vec![Value::Texto(clave), valor]));
                     }
                 }
@@ -1450,13 +1644,13 @@ impl Interprete {
             }
             "copiar" => {
                 verificar_aridad("copiar", 0, 0, &args)?;
-                let copia = dict.borrow().clone();
-                Ok(Value::Diccionario(Rc::new(RefCell::new(copia))))
+                let copia = dict.lock().unwrap().clone();
+                Ok(Value::Diccionario(Arc::new(Mutex::new(copia))))
             }
             "unir" => {
                 verificar_aridad("unir", 1, 1, &args)?;
                 let otro = match &args[0] {
-                    Value::Diccionario(d) => d.borrow().clone(),
+                    Value::Diccionario(d) => d.lock().unwrap().clone(),
                     v => {
                         return Err(Error::ejecucion(format!(
                             "'unir' espera un diccionario, se recibió {}",
@@ -1464,15 +1658,15 @@ impl Interprete {
                         )))
                     }
                 };
-                let mut resultado = dict.borrow().clone();
+                let mut resultado = dict.lock().unwrap().clone();
                 for (clave, valor) in otro {
                     resultado.insert(clave, valor);
                 }
-                Ok(Value::Diccionario(Rc::new(RefCell::new(resultado))))
+                Ok(Value::Diccionario(Arc::new(Mutex::new(resultado))))
             }
             "limpiar" => {
                 verificar_aridad("limpiar", 0, 0, &args)?;
-                dict.borrow_mut().clear();
+                dict.lock().unwrap().clear();
                 Ok(Value::Nulo)
             }
             otro => Err(Error::ejecucion(format!(
@@ -1683,11 +1877,11 @@ impl Interprete {
         &mut self,
         modulo: &str,
         alias: Option<String>,
-        entorno: &Rc<RefCell<Entorno>>,
+        entorno: &Arc<Mutex<Entorno>>,
     ) -> Result<(), Error> {
         if let Some(valor) = modulos::obtener_modulo(modulo) {
             let nombre = alias.unwrap_or_else(|| modulo_nombre(modulo));
-            entorno.borrow_mut().definir(nombre, valor);
+            entorno.lock().unwrap().definir(nombre, valor);
             return Ok(());
         }
 
@@ -1699,7 +1893,7 @@ impl Interprete {
                 .unwrap_or(modulo)
                 .to_string()
         });
-        entorno.borrow_mut().definir(nombre, valor);
+        entorno.lock().unwrap().definir(nombre, valor);
         Ok(())
     }
 
@@ -1751,13 +1945,13 @@ impl Interprete {
                     ))
                 }
             }
-            let miembros = entorno.borrow().valores.clone();
+            let miembros = entorno.lock().unwrap().valores.clone();
             let nombre = canonico
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("modulo")
                 .to_string();
-            Ok(Value::Modulo(Rc::new(Modulo { nombre, miembros })))
+            Ok(Value::Modulo(Arc::new(Modulo { nombre, miembros })))
         })();
 
         self.ruta_base = anterior;
@@ -1772,7 +1966,7 @@ impl Interprete {
 // Utilidades
 // ----------------------------------------------------------------------
 
-pub fn buscar_metodo(clase: &Rc<Clase>, nombre: &str) -> Option<Rc<Funcion>> {
+pub fn buscar_metodo(clase: &Arc<Clase>, nombre: &str) -> Option<Arc<Funcion>> {
     if let Some(metodo) = clase.metodos.get(nombre) {
         return Some(metodo.clone());
     }
@@ -1914,8 +2108,8 @@ fn nativa_logico(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
 fn nativa_longitud(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     match &args[0] {
         Value::Texto(t) => Ok(Value::Entero(t.chars().count() as i64)),
-        Value::Lista(l) => Ok(Value::Entero(l.borrow().len() as i64)),
-        Value::Diccionario(d) => Ok(Value::Entero(d.borrow().len() as i64)),
+        Value::Lista(l) => Ok(Value::Entero(l.lock().unwrap().len() as i64)),
+        Value::Diccionario(d) => Ok(Value::Entero(d.lock().unwrap().len() as i64)),
         otro => Err(Error::ejecucion(format!(
             "'longitud' no admite un valor de tipo {}",
             otro.tipo_nombre()
@@ -1989,9 +2183,9 @@ fn nativa_error(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
 
 fn nativa_copiar(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     match &args[0] {
-        Value::Lista(l) => Ok(Value::lista(l.borrow().clone())),
-        Value::Diccionario(d) => Ok(Value::Diccionario(Rc::new(RefCell::new(
-            d.borrow().clone(),
+        Value::Lista(l) => Ok(Value::lista(l.lock().unwrap().clone())),
+        Value::Diccionario(d) => Ok(Value::Diccionario(Arc::new(Mutex::new(
+            d.lock().unwrap().clone(),
         )))),
         otro => Ok(otro.clone()),
     }

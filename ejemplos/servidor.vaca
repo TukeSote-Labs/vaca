@@ -7,11 +7,12 @@
 importar http
 importar json
 importar tiempo
+importar concurrencia
 
-solicitudes = 0
+solicitudes = concurrencia.contador(0)
 
 fn manejador(peticion) {
-    solicitudes = solicitudes + 1
+    total = solicitudes.incrementar()
 
     si peticion.metodo == "GET" y peticion.ruta == "/" {
         retornar {
@@ -25,7 +26,7 @@ fn manejador(peticion) {
         retornar {
             "cuerpo": {
                 "estado": "ok",
-                "solicitudes": solicitudes,
+                "solicitudes": total,
                 "hora": tiempo.fecha_iso()
             }
         }

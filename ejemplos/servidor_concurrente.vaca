@@ -1,0 +1,71 @@
+# Servidor concurrente para pruebas de carga y laboratorio de estrés.
+# Ejecuta: vaca ejemplos/servidor_concurrente.vaca
+# Prueba:  python3 scripts/probar_concurrencia.py
+#
+# Cada conexión se atiende en su propio hilo, así que las peticiones lentas
+# no bloquean a las demás. El estado compartido usa primitivas atómicas.
+
+importar http
+importar json
+importar tiempo
+importar concurrencia
+
+peticiones = concurrencia.contador(0)
+lentas = concurrencia.contador(0)
+errores = concurrencia.contador(0)
+
+fn manejador(peticion) {
+    total = peticiones.incrementar()
+
+    si peticion.metodo == "GET" y peticion.ruta == "/salud" {
+        retornar {
+            "cuerpo": {
+                "estado": "ok",
+                "peticiones": total,
+                "hilos": concurrencia.hilos()
+            }
+        }
+    }
+
+    si peticion.metodo == "GET" y peticion.ruta == "/metricas" {
+        retornar {
+            "cuerpo": {
+                "peticiones": total,
+                "lentas": lentas.valor(),
+                "errores": errores.valor()
+            }
+        }
+    }
+
+    # Simula trabajo lento para comprobar que hay paralelismo real.
+    si peticion.metodo == "GET" y peticion.ruta == "/lento" {
+        ms = entero(peticion.consulta.get("ms", "100"))
+        si ms < 0 o ms > 30000 {
+            errores.incrementar()
+            retornar {"estado": 400, "cuerpo": {"error": "ms fuera de rango"}}
+        }
+        lentas.incrementar()
+        tiempo.dormir(ms)
+        retornar {"cuerpo": {"esperado": ms, "peticion": total}}
+    }
+
+    # Devuelve el JSON recibido, añadiendo el número de petición.
+    si peticion.metodo == "POST" y peticion.ruta == "/eco" {
+        intentar {
+            recibido = json.parse(peticion.cuerpo)
+            retornar {"cuerpo": {"recibido": recibido, "peticion": total}}
+        } atrapar error {
+            errores.incrementar()
+            retornar {"estado": 400, "cuerpo": {"error": a"JSON inválido: {error}"}}
+        }
+    }
+
+    retornar {"estado": 404, "cuerpo": {"error": "ruta no encontrada"}}
+}
+
+imprimir("Servidor concurrente de Vaca en http://localhost:8090")
+imprimir("  GET  /salud")
+imprimir("  GET  /metricas")
+imprimir("  GET  /lento?ms=200")
+imprimir("  POST /eco")
+http.servidor("0.0.0.0", 8090, manejador)
