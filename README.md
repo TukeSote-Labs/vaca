@@ -15,7 +15,7 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 59 pruebas automatizadas y ejemplos ejecutables.
+- 62 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** intérprete de árbol funcional con análisis semántico previo de
 > variables locales no usadas y concurrencia real basada en hilos. No usa
@@ -95,6 +95,7 @@ convención del lenguaje.
 ./target/release/vaca ejemplos/async.vaca
 ./target/release/vaca ejemplos/concurrencia.vaca
 ./target/release/vaca ejemplos/archivos.vaca
+./target/release/vaca ejemplos/config.vaca
 ./target/release/vaca ejemplos/importar.vaca
 ./target/release/vaca ejemplos/datos.vaca
 ```
@@ -645,8 +646,21 @@ variádicos.
 
 ### `sistema`
 
-`sistema.env(nombre, defecto)`, `sistema.argumentos()`, `sistema.salir(codigo)`,
-`sistema.directorio()`, `sistema.plataforma()`.
+`sistema.env(nombre, defecto)`, `sistema.cargar_env(ruta, obligatorio)`,
+`sistema.argumentos()`, `sistema.salir(codigo)`, `sistema.directorio()`,
+`sistema.plataforma()`.
+
+`sistema.cargar_env()` lee un archivo `.env` y devuelve un diccionario; no
+modifica el entorno del proceso. Soporta comentarios al final de la línea,
+`export`, comillas simples o dobles y valores que contienen `=`:
+
+```vaca
+importar sistema
+
+config = sistema.cargar_env(".env")
+puerto = sistema.env("PUERTO", config.get("PUERTO", "8080"))
+imprimir(puerto)
+```
 
 ### `concurrencia`
 

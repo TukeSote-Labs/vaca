@@ -1,0 +1,28 @@
+# Lectura de configuración desde un archivo .env.
+# Ejecuta: vaca ejemplos/config.vaca
+
+importar sistema
+
+CONFIG = sistema.cargar_env()
+
+# Las variables de entorno reales tienen prioridad sobre el archivo.
+HOST = sistema.env("HOST", CONFIG.get("HOST", "127.0.0.1"))
+PUERTO = sistema.env("PUERTO", CONFIG.get("PUERTO", "8080"))
+DEPURACION = CONFIG.get("DEPURACION", "falso") == "verdadero"
+
+imprimir("Host:", HOST)
+imprimir("Puerto:", PUERTO)
+imprimir("¿Depuración?", DEPURACION)
+imprimir("URL base:", CONFIG.get("URL_BASE", "http://localhost"))
+imprimir("Etiqueta:", CONFIG.get("ETIQUETA"))
+imprimir("Token:", CONFIG.get("TOKEN"))
+imprimir("Conexión:", CONFIG.get("CONEXION"))
+imprimir("¿SIN_VALOR está vacía?", CONFIG.get("SIN_VALOR", "(sin definir)") == "")
+
+CLAVES = CONFIG.llaves()
+CLAVES.ordenar()
+imprimir("\nClaves cargadas:", CLAVES)
+
+# Un archivo opcional que puede no existir: devuelve un diccionario vacío.
+EXTRA = sistema.cargar_env(".env.local")
+imprimir("Claves extra:", EXTRA.longitud())

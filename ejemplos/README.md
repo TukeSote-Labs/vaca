@@ -29,6 +29,7 @@ cargo run -- ejemplos/<archivo>.vaca
 | `async.vaca` | Tareas `async`, `esperar` paralelo, resultado cacheado y errores. |
 | `concurrencia.vaca` | Hilos, `concurrencia.paralelo`, contador atómico y diccionario compartido. |
 | `archivos.vaca` | Lectura, escritura, anexado, directorios y borrado. |
+| `config.vaca` + `.env` | Carga de configuración con `sistema.cargar_env`, comentarios al final y comillas. |
 | `importar.vaca` + `util.vaca` | Importación de módulos escritos en Vaca. |
 | `datos.vaca` + `ventas.csv` | DataFrames, filtros, orden, mutación y agrupación. |
 | `servidor.vaca` | Servidor HTTP básico con rutas y JSON. |

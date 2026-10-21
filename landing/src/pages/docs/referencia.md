@@ -96,7 +96,7 @@ verdadero.
 | `json` | `parse`, `stringify`, `valido` |
 | `mate` | `PI`, `E`, `raiz`, `potencia`, `redondear`, `piso`, `techo`, `absoluto`, `minimo`, `maximo`, `sumar`, `promedio`, `aleatorio`, `aleatorio_entero`, `logaritmo`, `seno`, `coseno`, `tangente` |
 | `tiempo` | `ahora`, `millis`, `dormir`, `fecha`, `fecha_iso`, `iso` |
-| `sistema` | `env`, `argumentos`, `salir`, `directorio`, `plataforma` |
+| `sistema` | `env`, `cargar_env`, `argumentos`, `salir`, `directorio`, `plataforma` |
 | `archivo` | `leer`, `escribir`, `anexar`, `existe`, `eliminar`, `listar`, `crear_dir`, `tamano`, `ruta_actual` |
 | `cadenas` | `unir`, `mayusculas`, `minusculas`, `recortar`, `reemplazar`, `dividir`, `contiene`, `empieza_con`, `termina_con`, `repetir`, `rellenar_izquierda`, `rellenar_derecha`, `longitud` |
 | `datos` | `leer_csv`, `guardar_csv`, `dimensiones`, `nombres`, `columna`, `filtrar`, `ordenar`, `mutar`, `agrupar_resumir`, `ver`, `a_json`, `desde_json`, `unir`, `seleccionar`, `eliminar_columna` |

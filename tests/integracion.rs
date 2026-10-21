@@ -146,3 +146,53 @@ fn json_roundtrip_complejo() {
         "3\nverdadero\ntexto con \"comillas\"\nverdadero\nfalso\n"
     );
 }
+
+#[test]
+fn sistema_cargar_env_lee_comentarios_y_comillas() {
+    let dir = directorio_temporal("env");
+    let ruta = dir.join(".env");
+    fs::write(
+        &ruta,
+        r#"
+# Configuración de prueba
+PUERTO=8080
+NOMBRE="Vaca servidor" # comentario al final
+export DEBUG=true
+URL=http://localhost:8080/api?x=1
+CLAVE='valor # literal'
+"#,
+    )
+    .unwrap();
+
+    let ruta_texto = ruta.to_string_lossy().replace('\\', "\\\\");
+    let codigo = format!(
+        r#"
+        importar sistema
+
+        config = sistema.cargar_env("{ruta}")
+        imprimir(config.get("PUERTO"))
+        imprimir(config.get("NOMBRE"))
+        imprimir(config.get("DEBUG"))
+        imprimir(config.get("URL"))
+        imprimir(config.get("CLAVE"))
+
+        vacio = sistema.cargar_env("{ruta}.no-existe")
+        imprimir(vacio.longitud())
+
+        intentar {{
+            sistema.cargar_env("{ruta}.no-existe", verdadero)
+        }} atrapar {{
+            imprimir("error esperado")
+        }}
+        "#,
+        ruta = ruta_texto
+    );
+
+    let salida = ejecutar_fuente(&codigo).unwrap();
+    assert_eq!(
+        salida,
+        "8080\nVaca servidor\ntrue\nhttp://localhost:8080/api?x=1\nvalor # literal\n0\nerror esperado\n"
+    );
+
+    let _ = fs::remove_dir_all(&dir);
+}

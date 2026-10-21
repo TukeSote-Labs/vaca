@@ -125,12 +125,46 @@ sistema.salir(0)
 | Función | Descripción |
 | :--- | :--- |
 | `env(nombre, defecto)` | Variable de entorno o defecto |
+| `cargar_env(ruta = ".env", obligatorio = falso)` | Lee un `.env` y devuelve un diccionario |
 | `argumentos()` | Lista de argumentos pasados tras el archivo |
 | `salir(codigo = 0)` | Termina el proceso con un código |
 | `directorio()` | Directorio de trabajo actual |
 | `plataforma()` | Sistema operativo |
 
 `salir` no se puede capturar con `intentar`/`atrapar`.
+
+### Archivos `.env`
+
+`sistema.cargar_env` lee un archivo `.env` y devuelve un **diccionario**. No
+modifica las variables de entorno del proceso:
+
+```vaca
+importar sistema
+
+config = sistema.cargar_env(".env")
+puerto = sistema.env("PUERTO", config.get("PUERTO", "8080"))
+imprimir(puerto)
+```
+
+- Sin argumentos lee `.env` desde el directorio del programa.
+- Si el archivo no existe y `obligatorio` es `falso`, devuelve `{}`.
+- Con `obligatorio = verdadero`, lanza un error.
+- Soporta `export`, comillas simples y dobles, escapes en comillas dobles y
+  comentarios `#` al principio o al final de la línea.
+- En valores sin comillas, `#` solo inicia un comentario si va precedido de
+  espacio; `abc#def` conserva el `#`.
+- No expande `${VARIABLES}` ni valores multilínea.
+
+Ejemplo de `.env`:
+
+```text
+# Configuración
+PUERTO=8080
+NOMBRE="Vaca servidor" # comentario al final
+export DEBUG=true
+URL=http://localhost:8080/api?x=1
+CLAVE='valor # literal'
+```
 
 ## `archivo`
 

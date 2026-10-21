@@ -418,6 +418,7 @@ El directorio `ejemplos/` incluye programas más largos:
 | `poo.vaca` / `poo_avanzada.vaca` | Herencia, contratos, observer y strategy |
 | `patrones.vaca` | Singleton, middleware, cola FIFO, caché y rate limiter |
 | `datos.vaca` | DataFrames con `ventas.csv` |
+| `config.vaca` + `.env` | Configuración con `sistema.cargar_env` y comentarios al final |
 | `async.vaca` y `concurrencia.vaca` | Tareas, hilos y contadores |
 | `servidor.vaca` / `servidor_api.vaca` | Servidores HTTP |
 | `servidor_concurrente.vaca` | Servidor de estrés con métricas |
