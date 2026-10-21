@@ -51,7 +51,7 @@ fn memoizar(original) {
     cache = {}
     retornar fn(n) {
         si cache.existe(n) {
-            retornar cache.get(n)
+            retornar cache.obtener(n)
         }
         resultado = original(n)
         cache.set(n, resultado)

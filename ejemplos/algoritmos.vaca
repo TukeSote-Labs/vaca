@@ -6,7 +6,7 @@ fn dos_suma(numeros, objetivo) {
     para i = 0 hasta numeros.longitud() - 1 {
         falta = objetivo - numeros[i]
         si vistos.existe(falta) {
-            retornar [vistos.get(falta), i]
+            retornar [vistos.obtener(falta), i]
         }
         vistos.set(numeros[i], i)
     }
@@ -30,7 +30,7 @@ fn busqueda_binaria(ordenados, objetivo) {
 
 fn fibonacci(n, memo = nulo) {
     si memo == nulo { memo = {} }
-    si memo.existe(n) { retornar memo.get(n) }
+    si memo.existe(n) { retornar memo.obtener(n) }
     si n <= 1 { retornar n }
     resultado = fibonacci(n - 1, memo) + fibonacci(n - 2, memo)
     memo.set(n, resultado)
@@ -47,7 +47,7 @@ fn parentesis_balanceados(texto) {
         }
         si pares.existe(c) {
             si pila.longitud() == 0 { retornar falso }
-            si pila.pop() != pares.get(c) { retornar falso }
+            si pila.pop() != pares.obtener(c) { retornar falso }
         }
     }
     retornar pila.longitud() == 0

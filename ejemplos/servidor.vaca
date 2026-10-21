@@ -33,7 +33,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "GET" y peticion.ruta == "/usuarios" {
-        nombre = peticion.consulta.get("nombre", "invitado")
+        nombre = peticion.consulta.obtener("nombre", "invitado")
         retornar {
             "cuerpo": {
                 "usuario": nombre,

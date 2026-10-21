@@ -170,11 +170,11 @@ CLAVE='valor # literal'
         importar sistema
 
         config = sistema.cargar_env("{ruta}")
-        imprimir(config.get("PUERTO"))
-        imprimir(config.get("NOMBRE"))
-        imprimir(config.get("DEBUG"))
-        imprimir(config.get("URL"))
-        imprimir(config.get("CLAVE"))
+        imprimir(config.obtener("PUERTO"))
+        imprimir(config.obtener("NOMBRE"))
+        imprimir(config.obtener("DEBUG"))
+        imprimir(config.obtener("URL"))
+        imprimir(config.obtener("CLAVE"))
 
         vacio = sistema.cargar_env("{ruta}.no-existe")
         imprimir(vacio.longitud())

@@ -151,7 +151,7 @@ fn diccionario_compartido_con_incremento_atomico() {
             tareas.agregar(concurrencia.tarea(visitar))
         }
         concurrencia.esperar_todas(tareas)
-        imprimir(visitas.get("total", 0))
+        imprimir(visitas.obtener("total", 0))
         "#,
     )
     .unwrap();

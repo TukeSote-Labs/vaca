@@ -19,7 +19,7 @@ fn bfs(grafo, inicio) {
         si visitados.existe(nodo) { continuar }
         visitados.set(nodo, verdadero)
         orden.agregar(nodo)
-        para vecino en grafo.get(nodo, []) {
+        para vecino en grafo.obtener(nodo, []) {
             si no visitados.existe(vecino) {
                 cola.agregar(vecino)
             }
@@ -32,7 +32,7 @@ fn dfs(grafo, nodo, visitados, orden) {
     si visitados.existe(nodo) { retornar }
     visitados.set(nodo, verdadero)
     orden.agregar(nodo)
-    para vecino en grafo.get(nodo, []) {
+    para vecino en grafo.obtener(nodo, []) {
         dfs(grafo, vecino, visitados, orden)
     }
 }
@@ -45,7 +45,7 @@ fn camino(grafo, inicio, fin) {
     mientras cola.longitud() > 0 {
         nodo = cola.eliminar(0)
         si nodo == fin { romper }
-        para vecino en grafo.get(nodo, []) {
+        para vecino en grafo.obtener(nodo, []) {
             si no padres.existe(vecino) {
                 padres.set(vecino, nodo)
                 cola.agregar(vecino)
@@ -59,7 +59,7 @@ fn camino(grafo, inicio, fin) {
     actual = fin
     mientras actual != nulo {
         resultado.agregar(actual)
-        actual = padres.get(actual)
+        actual = padres.obtener(actual)
     }
     resultado.invertir()
     retornar resultado
@@ -71,14 +71,14 @@ fn orden_topologico(grafo) {
         grados.set(nodo, 0)
     }
     para nodo en grafo.llaves() {
-        para vecino en grafo.get(nodo, []) {
-            grados.set(vecino, grados.get(vecino, 0) + 1)
+        para vecino en grafo.obtener(nodo, []) {
+            grados.set(vecino, grados.obtener(vecino, 0) + 1)
         }
     }
 
     cola = []
     para nodo en grafo.llaves() {
-        si grados.get(nodo) == 0 {
+        si grados.obtener(nodo) == 0 {
             cola.agregar(nodo)
         }
     }
@@ -87,9 +87,9 @@ fn orden_topologico(grafo) {
     mientras cola.longitud() > 0 {
         nodo = cola.eliminar(0)
         orden.agregar(nodo)
-        para vecino en grafo.get(nodo, []) {
-            grados.set(vecino, grados.get(vecino) - 1)
-            si grados.get(vecino) == 0 {
+        para vecino en grafo.obtener(nodo, []) {
+            grados.set(vecino, grados.obtener(vecino) - 1)
+            si grados.obtener(vecino) == 0 {
                 cola.agregar(vecino)
             }
         }

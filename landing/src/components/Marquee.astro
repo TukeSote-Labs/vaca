@@ -1,13 +1,13 @@
 ---
 const items = [
-  'Español',
-  'Rust',
-  '0 dependencias',
-  'HTTP concurrente',
-  'DataFrames',
-  '62 pruebas',
-  'MIT',
-  'sin frameworks',
+    "Español",
+    "Rust",
+    "0 dependencias",
+    "HTTP concurrente",
+    "DataFrames",
+    "63 pruebas",
+    "MIT",
+    "sin frameworks",
 ];
 
 // Tres repeticiones por grupo para cubrir pantallas anchas sin huecos.
@@ -15,82 +15,80 @@ const cinta = [...items, ...items, ...items];
 ---
 
 <div class="marquesina" aria-hidden="true">
-  <div class="pista">
-    {
-      [0, 1].map(() => (
-        <div class="grupo">
-          {cinta.map((item) => (
-            <span>
-              {item} <b>★</b>
-            </span>
-          ))}
-        </div>
-      ))
-    }
-  </div>
+    <div class="pista">
+        {[0, 1].map(() => (
+            <div class="grupo">
+                {cinta.map((item) => (
+                    <span>
+                        {item} <b>★</b>
+                    </span>
+                ))}
+            </div>
+        ))}
+    </div>
 </div>
 
 <style>
-  .marquesina {
-    overflow: hidden;
-    border-block: var(--borde);
-    background: var(--amarillo);
-  }
-
-  .pista {
-    display: flex;
-    width: max-content;
-    animation: desfilar 26s linear infinite;
-  }
-
-  .grupo {
-    display: flex;
-    flex-shrink: 0;
-    gap: 1.6rem;
-    padding: 0.62rem 0 0.62rem 1.6rem;
-  }
-
-  span {
-    display: inline-flex;
-    align-items: center;
-    gap: 1.1rem;
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  b {
-    font-size: 0.9rem;
-  }
-
-  @keyframes desfilar {
-    to {
-      transform: translateX(-50%);
+    .marquesina {
+        overflow: hidden;
+        border-block: var(--borde);
+        background: var(--amarillo);
     }
-  }
 
-  @media (prefers-reduced-motion: reduce) {
     .pista {
-      animation: none;
-      width: auto;
-    }
-
-    .grupo:nth-child(2) {
-      display: none;
+        display: flex;
+        width: max-content;
+        animation: desfilar 26s linear infinite;
     }
 
     .grupo {
-      flex-shrink: 1;
-      flex-wrap: wrap;
-      width: 100%;
-      padding: 0.5rem 1rem;
+        display: flex;
+        flex-shrink: 0;
+        gap: 1.6rem;
+        padding: 0.62rem 0 0.62rem 1.6rem;
     }
 
     span {
-      white-space: normal;
+        display: inline-flex;
+        align-items: center;
+        gap: 1.1rem;
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        white-space: nowrap;
     }
-  }
+
+    b {
+        font-size: 0.9rem;
+    }
+
+    @keyframes desfilar {
+        to {
+            transform: translateX(-50%);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .pista {
+            animation: none;
+            width: auto;
+        }
+
+        .grupo:nth-child(2) {
+            display: none;
+        }
+
+        .grupo {
+            flex-shrink: 1;
+            flex-wrap: wrap;
+            width: 100%;
+            padding: 0.5rem 1rem;
+        }
+
+        span {
+            white-space: normal;
+        }
+    }
 </style>

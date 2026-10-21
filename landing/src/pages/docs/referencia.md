@@ -75,7 +75,7 @@ verdadero.
 
 ### Diccionarios
 
-`get`, `set`, `incrementar`, `existe`, `eliminar`, `longitud`, `llaves`,
+`obtener`, `set`, `incrementar`, `existe`, `eliminar`, `longitud`, `llaves`,
 `valores`, `items`, `unir`, `limpiar`, `copiar`.
 
 ### Texto

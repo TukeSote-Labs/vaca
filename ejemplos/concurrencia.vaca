@@ -82,7 +82,7 @@ para _ = 1 hasta 4 {
 }
 concurrencia.esperar_todas(tareas)
 
-total_visitas = visitas.get("total", 0)
+total_visitas = visitas.obtener("total", 0)
 imprimir(a"Visitas: {total_visitas} (esperado 2000)")
 afirmar(total_visitas == 2000, "se perdieron incrementos del diccionario")
 

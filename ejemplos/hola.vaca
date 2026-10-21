@@ -15,4 +15,4 @@ para fruta en frutas {
 
 persona = {"nombre": "Ana", "edad": 30}
 persona.set("ciudad", "Madrid")
-imprimir(a"{persona.get(\"nombre\")} vive en {persona.get(\"ciudad\")}")
+imprimir(a"{persona.obtener(\"nombre\")} vive en {persona.obtener(\"ciudad\")}")

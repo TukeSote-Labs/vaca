@@ -496,7 +496,7 @@ imprimir(persona.falta)           # nulo
 
 | Método | Descripción |
 | :--- | :--- |
-| `get(clave, defecto)` | Valor o defecto (`nulo` si se omite) |
+| `obtener(clave, defecto)` | Valor o defecto (`nulo` si se omite) |
 | `set(clave, valor)` | Inserta o actualiza |
 | `incrementar(clave, cantidad)` | Suma atómicamente a un entero |
 | `existe(clave)` | `verdadero` si la clave existe |
@@ -514,11 +514,11 @@ visitas = {}
 visitas.incrementar("total")
 visitas.incrementar("total", 2)
 
-imprimir(visitas.get("total"))    # 3
-imprimir(visitas.llaves())        # ["total"]
+imprimir(visitas.obtener("total"))    # 3
+imprimir(visitas.llaves())             # ["total"]
 
 para clave en visitas {
-    imprimir(a"{clave} = {visitas.get(clave)}")
+    imprimir(a"{clave} = {visitas.obtener(clave)}")
 }
 ```
 

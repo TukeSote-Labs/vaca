@@ -142,7 +142,7 @@ modifica las variables de entorno del proceso:
 importar sistema
 
 config = sistema.cargar_env(".env")
-puerto = sistema.env("PUERTO", config.get("PUERTO", "8080"))
+puerto = sistema.env("PUERTO", config.obtener("PUERTO", "8080"))
 imprimir(puerto)
 ```
 

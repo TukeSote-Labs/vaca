@@ -31,8 +31,8 @@ fn interpolacion_de_texto() {
         nombre = "Mundo"
         datos = {"clave": "valor"}
         imprimir(a"Hola, {nombre}! 2+2={2 + 2}")
-        imprimir(a"Con comillas simples: {datos.get('clave')}")
-        imprimir(a"Con comillas escapadas: {datos.get(\"clave\")}")
+        imprimir(a"Con comillas simples: {datos.obtener('clave')}")
+        imprimir(a"Con comillas escapadas: {datos.obtener(\"clave\")}")
         "#,
     )
     .unwrap();
@@ -156,8 +156,8 @@ fn diccionarios_y_metodos() {
         r#"
         d = {"nombre": "Vaca", "edad": 2}
         d.set("pais", "ES")
-        imprimir(d.get("nombre"))
-        imprimir(d.get("falta", "defecto"))
+        imprimir(d.obtener("nombre"))
+        imprimir(d.obtener("falta", "defecto"))
         imprimir(d.existe("edad"))
         imprimir(d.longitud())
         imprimir(d.llaves())
@@ -170,6 +170,12 @@ fn diccionarios_y_metodos() {
         salida,
         "Vaca\ndefecto\nverdadero\n3\n[\"edad\", \"nombre\", \"pais\"]\n2\n{\"nombre\": \"Vaca\", \"pais\": \"ES\"}\n"
     );
+}
+
+#[test]
+fn get_en_ingles_ya_no_existe() {
+    let error = ejecutar_fuente("d = {\"a\": 1}\nimprimir(d.get(\"a\"))").unwrap_err();
+    assert!(error.to_string().contains("'get'"));
 }
 
 #[test]

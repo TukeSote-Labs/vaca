@@ -46,7 +46,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "GET" y peticion.ruta == "/api/productos" {
-        nombre = peticion.consulta.get("nombre", "").recortar()
+        nombre = peticion.consulta.obtener("nombre", "").recortar()
         si nombre == "" {
             retornar responder(200, {
                 "productos": productos,
@@ -63,7 +63,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "GET" y peticion.ruta == "/api/productos/detalle" {
-        id = entero(peticion.consulta.get("id", "0"))
+        id = entero(peticion.consulta.obtener("id", "0"))
         producto = buscar_producto(id)
         si producto == nulo {
             retornar responder(404, {"error": a"No existe el producto {id}"})
@@ -80,11 +80,11 @@ fn manejador(peticion) {
             si no datos.existe("precio") {
                 retornar responder(400, {"error": "falta el campo precio"})
             }
-            nombre = datos.get("nombre").recortar()
+            nombre = datos.obtener("nombre").recortar()
             si nombre == "" {
                 retornar responder(400, {"error": "el nombre no puede estar vacío"})
             }
-            precio = decimal(datos.get("precio"))
+            precio = decimal(datos.obtener("precio"))
             si precio < 0 {
                 retornar responder(400, {"error": "el precio no puede ser negativo"})
             }

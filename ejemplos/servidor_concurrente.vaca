@@ -39,7 +39,7 @@ fn manejador(peticion) {
 
     # Simula trabajo lento para comprobar que hay paralelismo real.
     si peticion.metodo == "GET" y peticion.ruta == "/lento" {
-        ms = entero(peticion.consulta.get("ms", "100"))
+        ms = entero(peticion.consulta.obtener("ms", "100"))
         si ms < 0 o ms > 30000 {
             errores.incrementar()
             retornar {"estado": 400, "cuerpo": {"error": "ms fuera de rango"}}

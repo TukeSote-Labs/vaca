@@ -1561,8 +1561,8 @@ impl Interprete {
         args: Vec<Value>,
     ) -> Result<Value, Error> {
         match nombre {
-            "get" | "obtener" => {
-                verificar_aridad("get", 1, 2, &args)?;
+            "obtener" => {
+                verificar_aridad("obtener", 1, 2, &args)?;
                 let clave = clave_texto(&args[0]);
                 let valor = dict.lock().unwrap().get(&clave).cloned();
                 Ok(valor.unwrap_or_else(|| {

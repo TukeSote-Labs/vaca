@@ -6,18 +6,18 @@ importar sistema
 CONFIG = sistema.cargar_env()
 
 # Las variables de entorno reales tienen prioridad sobre el archivo.
-HOST = sistema.env("HOST", CONFIG.get("HOST", "127.0.0.1"))
-PUERTO = sistema.env("PUERTO", CONFIG.get("PUERTO", "8080"))
-DEPURACION = CONFIG.get("DEPURACION", "falso") == "verdadero"
+HOST = sistema.env("HOST", CONFIG.obtener("HOST", "127.0.0.1"))
+PUERTO = sistema.env("PUERTO", CONFIG.obtener("PUERTO", "8080"))
+DEPURACION = CONFIG.obtener("DEPURACION", "falso") == "verdadero"
 
 imprimir("Host:", HOST)
 imprimir("Puerto:", PUERTO)
 imprimir("¿Depuración?", DEPURACION)
-imprimir("URL base:", CONFIG.get("URL_BASE", "http://localhost"))
-imprimir("Etiqueta:", CONFIG.get("ETIQUETA"))
-imprimir("Token:", CONFIG.get("TOKEN"))
-imprimir("Conexión:", CONFIG.get("CONEXION"))
-imprimir("¿SIN_VALOR está vacía?", CONFIG.get("SIN_VALOR", "(sin definir)") == "")
+imprimir("URL base:", CONFIG.obtener("URL_BASE", "http://localhost"))
+imprimir("Etiqueta:", CONFIG.obtener("ETIQUETA"))
+imprimir("Token:", CONFIG.obtener("TOKEN"))
+imprimir("Conexión:", CONFIG.obtener("CONEXION"))
+imprimir("¿SIN_VALOR está vacía?", CONFIG.obtener("SIN_VALOR", "(sin definir)") == "")
 
 CLAVES = CONFIG.llaves()
 CLAVES.ordenar()

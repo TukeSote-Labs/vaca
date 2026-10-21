@@ -26,7 +26,7 @@ fn middleware_trazas(peticion, siguiente) {
 }
 
 fn middleware_auth(peticion, siguiente) {
-    si peticion.cabeceras.get("authorization") == nulo {
+    si peticion.cabeceras.obtener("authorization") == nulo {
         retornar {"estado": 401, "error": "falta authorization"}
     }
     imprimir("Middleware auth: OK")
@@ -92,7 +92,7 @@ fn calcular_costoso(n) {
 fn obtener_resultado(n) {
     si cache.existe(n) {
         imprimir(a"Cache hit para {n}")
-        retornar cache.get(n)
+        retornar cache.obtener(n)
     }
     resultado = calcular_costoso(n)
     cache.set(n, resultado)
@@ -108,7 +108,7 @@ imprimir(obtener_resultado(200))
 fn crear_limitador(maximo, ventana) {
     registros = {}
     retornar fn(usuario, instante) {
-        registro = registros.get(usuario, {"inicio": instante, "cuenta": 0})
+        registro = registros.obtener(usuario, {"inicio": instante, "cuenta": 0})
         si instante - registro.inicio >= ventana {
             registro.inicio = instante
             registro.cuenta = 0

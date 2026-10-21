@@ -90,7 +90,7 @@ frutas.ordenar()
 
 persona = {"nombre": "Ada", "lenguaje": "Vaca"}
 imprimir(frutas)
-imprimir(persona.get("nombre"))
+imprimir(persona.obtener("nombre"))
 ```
 
 Salida:

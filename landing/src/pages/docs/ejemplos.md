@@ -85,7 +85,7 @@ fn dos_suma(numeros, objetivo) {
     para i = 0 hasta numeros.longitud() - 1 {
         faltante = objetivo - numeros[i]
         si vistos.existe(faltante) {
-            retornar [vistos.get(faltante), i]
+            retornar [vistos.obtener(faltante), i]
         }
         vistos.set(a"{numeros[i]}", i)
     }

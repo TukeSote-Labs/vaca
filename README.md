@@ -15,7 +15,7 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 62 pruebas automatizadas y ejemplos ejecutables.
+- 63 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** intérprete de árbol funcional con análisis semántico previo de
 > variables locales no usadas y concurrencia real basada en hilos. No usa
@@ -337,8 +337,8 @@ simples o escapa las dobles:
 
 ```vaca
 datos = {"clave": "valor"}
-imprimir(a"Resultado: {datos.get('clave')}")
-imprimir(a"Resultado: {datos.get(\"clave\")}")
+imprimir(a"Resultado: {datos.obtener('clave')}")
+imprimir(a"Resultado: {datos.obtener(\"clave\")}")
 ```
 
 ### Tipos y conversión
@@ -476,8 +476,8 @@ d = {"nombre": "Vaca", "edad": 2}
 d.set("pais", "ES")
 d["ciudad"] = "Madrid"
 
-imprimir(d.get("nombre"))
-imprimir(d.get("falta", "valor por defecto"))
+imprimir(d.obtener("nombre"))
+imprimir(d.obtener("falta", "valor por defecto"))
 imprimir(d.existe("edad"))
 imprimir(d.llaves())
 imprimir(d.valores())
@@ -486,7 +486,7 @@ imprimir(d.eliminar("edad"))
 ```
 
 Acceder a una clave inexistente con `d["clave"]` o `d.clave` devuelve `nulo`;
-`get` permite un valor por defecto. Las claves se convierten a texto.
+`obtener` permite un valor por defecto. Las claves se convierten a texto.
 
 ### Clases, herencia y `este`
 
@@ -613,7 +613,7 @@ como operación atómica, útil para métricas compartidas:
 ```vaca
 visitas = {}
 visitas.incrementar("total")
-imprimir(visitas.get("total", 0))
+imprimir(visitas.obtener("total", 0))
 ```
 
 ---
@@ -658,7 +658,7 @@ modifica el entorno del proceso. Soporta comentarios al final de la línea,
 importar sistema
 
 config = sistema.cargar_env(".env")
-puerto = sistema.env("PUERTO", config.get("PUERTO", "8080"))
+puerto = sistema.env("PUERTO", config.obtener("PUERTO", "8080"))
 imprimir(puerto)
 ```
 

@@ -64,8 +64,8 @@ El manejador recibe un diccionario con estos campos:
 | `ip` | Texto | IP del cliente |
 
 ```vaca
-nombre = peticion.consulta.get("nombre", "invitado")
-autorizacion = peticion.cabeceras.get("authorization", "")
+nombre = peticion.consulta.obtener("nombre", "invitado")
+autorizacion = peticion.cabeceras.obtener("authorization", "")
 ```
 
 ### Respuesta
@@ -127,7 +127,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "GET" y peticion.ruta == "/productos" {
-        nombre = peticion.consulta.get("nombre", "").recortar()
+        nombre = peticion.consulta.obtener("nombre", "").recortar()
         si nombre == "" {
             retornar responder(200, {"productos": productos})
         }
@@ -145,8 +145,8 @@ fn manejador(peticion) {
             }
             producto = {
                 "id": siguiente_id.incrementar(),
-                "nombre": datos.get("nombre"),
-                "precio": decimal(datos.get("precio", 0))
+                "nombre": datos.obtener("nombre"),
+                "precio": decimal(datos.obtener("precio", 0))
             }
             productos.agregar(producto)
             retornar responder(201, {"producto": producto})
