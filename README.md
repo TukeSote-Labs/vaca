@@ -15,7 +15,7 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 63 pruebas automatizadas y ejemplos ejecutables.
+- 64 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** intérprete de árbol funcional con análisis semántico previo de
 > variables locales no usadas y concurrencia real basada en hilos. No usa
@@ -815,6 +815,42 @@ simultáneas para proteger el proceso frente a slowloris o picos de carga:
 ```vaca
 http.servidor("0.0.0.0", 8090, manejador, 1000)
 ```
+
+---
+
+## Rendimiento
+
+El intérprete está optimizado para ejecutar código de servidor sin
+dependencias externas:
+
+- **Hasher FNV-1a** en lugar de SipHash para variables, diccionarios,
+  instancias y módulos (`src/rapido.rs`).
+- **Ámbitos sin asignaciones**: los bloques que no declaran variables nuevas se
+  ejecutan directamente en el ámbito padre; los bucles no crean un entorno por
+  iteración.
+- **Reciclado de marcos y argumentos** en las llamadas a función.
+- **Asignación en un solo recorrido** y sin reasignar claves de texto.
+
+Los `Value::Texto` y los diccionarios siguen usando `String`, así que el código
+con mucha manipulación de texto paga el coste de clonar cadenas al leerlas.
+
+Banco de estrés (escala 1, binario `--release`, misma máquina):
+
+| Prueba | Vaca | Python 3 |
+| :--- | ---: | ---: |
+| aritmetica (2M) | 348 ms | 111 ms |
+| fib(25) | 45 ms | 6 ms |
+| listas (100k) | 45 ms | 15 ms |
+| diccionarios (200k) | 94 ms | 27 ms |
+| texto (50k) | 28 ms | 8 ms |
+| llamadas (500k) | 124 ms | 24 ms |
+| **TOTAL** | **~730 ms** | **~190 ms** |
+
+Usa siempre el binario `--release`: con `cargo run` (debug) el mismo banco
+tarda más del doble. La diferencia restante frente a Python está en la
+arquitectura: Vaca recorre el árbol con ámbitos basados en mapas, mientras
+CPython ejecuta bytecode con variables en posiciones fijas. Cerrar esa brecha
+del todo requiere compilar a bytecode con marcos por posiciones.
 
 ---
 

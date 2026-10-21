@@ -10,17 +10,16 @@ pub mod mate;
 pub mod sistema;
 pub mod tiempo;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::value::{Modulo, NativaFn, Value};
+use crate::value::{MapaValores, Modulo, NativaFn, Value};
 
 pub fn nativa(nombre: &str, min: usize, max: usize, funcion: NativaFn) -> Value {
     Value::nativa(nombre, min, max, funcion)
 }
 
 pub fn crear_modulo(nombre: &str, miembros: Vec<(&str, Value)>) -> Value {
-    let mut mapa = HashMap::new();
+    let mut mapa = MapaValores::default();
     for (clave, valor) in miembros {
         mapa.insert(clave.to_string(), valor);
     }

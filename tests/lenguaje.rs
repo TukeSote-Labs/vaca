@@ -179,6 +179,28 @@ fn get_en_ingles_ya_no_existe() {
 }
 
 #[test]
+fn cierres_capturan_la_variable_de_cada_iteracion() {
+    let salida = ejecutar_fuente(
+        r#"
+        fn crear() {
+            fs = []
+            i = 0
+            mientras i < 3 {
+                n = i
+                fs.agregar(fn() { retornar n })
+                i = i + 1
+            }
+            retornar fs
+        }
+        fs = crear()
+        imprimir(fs[0](), fs[1](), fs[2]())
+        "#,
+    )
+    .unwrap();
+    assert_eq!(salida, "0 1 2\n");
+}
+
+#[test]
 fn poo_herencia_y_metodos() {
     let salida = ejecutar_fuente(
         r#"

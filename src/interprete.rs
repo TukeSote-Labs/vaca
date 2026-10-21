@@ -11,9 +11,10 @@ use crate::ast::{Expr, MetodoClase, OpBinario, OpUnario, Stmt};
 use crate::error::Error;
 use crate::modulos;
 use crate::parser::Parser;
+use crate::rapido::{ConjuntoRapido, MapaRapido};
 use crate::value::{
     clave_texto, comparar_orden, valor_verdadero, valores_iguales, Clase, Funcion, Instancia,
-    Modulo, Tarea, Value,
+    MapaValores, Modulo, Tarea, Value,
 };
 
 // ----------------------------------------------------------------------
@@ -21,16 +22,24 @@ use crate::value::{
 // ----------------------------------------------------------------------
 
 pub struct Entorno {
-    pub valores: HashMap<String, Value>,
-    constantes: HashSet<String>,
+    pub valores: MapaValores,
+    constantes: ConjuntoRapido<String>,
     pub padre: Option<Arc<Mutex<Entorno>>>,
+}
+
+/// Resultado de intentar asignar a una variable ya existente.
+pub enum Asignacion {
+    Asignado,
+    Constante,
+    /// La variable no existe en ningún ámbito; devuelve el valor intacto.
+    NoExiste(Value),
 }
 
 impl Entorno {
     pub fn nuevo(padre: Option<Arc<Mutex<Entorno>>>) -> Arc<Mutex<Entorno>> {
         Arc::new(Mutex::new(Entorno {
-            valores: HashMap::new(),
-            constantes: HashSet::new(),
+            valores: MapaValores::default(),
+            constantes: ConjuntoRapido::default(),
             padre,
         }))
     }
@@ -39,39 +48,73 @@ impl Entorno {
         self.valores.insert(nombre.into(), valor);
     }
 
+    /// Actualiza una variable local sin asignar una clave nueva.
+    #[inline]
+    pub fn fijar(&mut self, nombre: &str, valor: Value) {
+        if let Some(hueco) = self.valores.get_mut(nombre) {
+            *hueco = valor;
+        } else {
+            self.valores.insert(nombre.to_string(), valor);
+        }
+    }
+
     pub fn definir_constante(&mut self, nombre: impl Into<String>, valor: Value) {
         let nombre = nombre.into();
         self.constantes.insert(nombre.clone());
         self.valores.insert(nombre, valor);
     }
 
+    #[inline]
     pub fn obtener(entorno: &Arc<Mutex<Entorno>>, nombre: &str) -> Option<Value> {
-        let (valor, padre) = {
+        let padre = {
             let e = entorno.lock().unwrap();
-            (e.valores.get(nombre).cloned(), e.padre.clone())
+            // Camino caliente: la variable suele estar en el ámbito actual.
+            // Evitamos clonar el `Arc` del padre (operación atómica) al acertar.
+            if let Some(valor) = e.valores.get(nombre) {
+                return Some(valor.clone());
+            }
+            e.padre.clone()
         };
-        valor.or_else(|| padre.and_then(|p| Entorno::obtener(&p, nombre)))
+        padre.and_then(|p| Entorno::obtener(&p, nombre))
     }
 
-    pub fn asignar(entorno: &Arc<Mutex<Entorno>>, nombre: &str, valor: Value) -> bool {
+    /// Comprueba si la variable existe sin clonar su valor.
+    #[inline]
+    pub fn existe(entorno: &Arc<Mutex<Entorno>>, nombre: &str) -> bool {
         let padre = {
-            let mut e = entorno.lock().unwrap();
-            if e.constantes.contains(nombre) {
-                return false;
-            }
+            let e = entorno.lock().unwrap();
             if e.valores.contains_key(nombre) {
-                e.valores.insert(nombre.to_string(), valor);
                 return true;
             }
             e.padre.clone()
         };
-        padre.is_some_and(|p| Entorno::asignar(&p, nombre, valor))
+        padre.is_some_and(|p| Entorno::existe(&p, nombre))
+    }
+
+    /// Busca la variable y la actualiza en un solo recorrido.
+    #[inline]
+    pub fn asignar(entorno: &Arc<Mutex<Entorno>>, nombre: &str, valor: Value) -> Asignacion {
+        let (padre, valor) = {
+            let mut e = entorno.lock().unwrap();
+            if !e.constantes.is_empty() && e.constantes.contains(nombre) {
+                return Asignacion::Constante;
+            }
+            if let Some(hueco) = e.valores.get_mut(nombre) {
+                *hueco = valor;
+                return Asignacion::Asignado;
+            }
+            (e.padre.clone(), valor)
+        };
+        match padre {
+            Some(p) => Entorno::asignar(&p, nombre, valor),
+            None => Asignacion::NoExiste(valor),
+        }
     }
 
     pub fn es_constante(entorno: &Arc<Mutex<Entorno>>, nombre: &str) -> bool {
         let padre = {
             let e = entorno.lock().unwrap();
-            if e.constantes.contains(nombre) {
+            if !e.constantes.is_empty() && e.constantes.contains(nombre) {
                 return true;
             }
             e.padre.clone()
@@ -107,6 +150,26 @@ pub struct Interprete {
     pub codigo_salida: Option<i32>,
     modulos_archivo: HashMap<PathBuf, Value>,
     importando: HashSet<PathBuf>,
+    /// Marcos de llamada reciclables (sin capturas de cierres).
+    marcos_libres: Vec<Arc<Mutex<Entorno>>>,
+    /// Vectores de argumentos reciclables.
+    args_libres: Vec<Vec<Value>>,
+}
+
+/// Indica si un bloque puede ejecutarse en el ámbito padre sin crear uno nuevo.
+///
+/// Solo es seguro cuando el bloque no declara funciones, clases ni constantes y
+/// todas sus asignaciones a variables apuntan a nombres ya existentes. Los
+/// bloques anidados gestionan su propio ámbito, así que no influyen aquí.
+fn puede_reusar_ambito(entorno: &Arc<Mutex<Entorno>>, sentencias: &[Stmt]) -> bool {
+    sentencias.iter().all(|stmt| match stmt {
+        Stmt::Funcion { .. } | Stmt::Clase { .. } | Stmt::Constante { .. } => false,
+        Stmt::Asignar {
+            objetivo: Expr::Variable(nombre),
+            ..
+        } => Entorno::existe(entorno, nombre),
+        _ => true,
+    })
 }
 
 impl Interprete {
@@ -125,6 +188,8 @@ impl Interprete {
             codigo_salida: None,
             modulos_archivo: HashMap::new(),
             importando: HashSet::new(),
+            marcos_libres: Vec::new(),
+            args_libres: Vec::new(),
         };
         interprete.registrar_globales();
         interprete
@@ -149,6 +214,8 @@ impl Interprete {
             codigo_salida: None,
             modulos_archivo: HashMap::new(),
             importando: HashSet::new(),
+            marcos_libres: Vec::new(),
+            args_libres: Vec::new(),
         }
     }
 
@@ -296,6 +363,11 @@ impl Interprete {
         padre: &Arc<Mutex<Entorno>>,
         predefinir: Option<(&str, Value)>,
     ) -> Result<Flujo, Error> {
+        // Si el bloque no declara nada nuevo, ejecutarlo en el padre ahorra
+        // un nivel de búsqueda en cada acceso a variable.
+        if predefinir.is_none() && puede_reusar_ambito(padre, sentencias) {
+            return self.ejecutar_lista(sentencias, padre);
+        }
         let entorno = Entorno::nuevo(Some(padre.clone()));
         if let Some((nombre, valor)) = predefinir {
             entorno.lock().unwrap().definir(nombre, valor);
@@ -305,6 +377,14 @@ impl Interprete {
     }
 
     fn hoistar(&mut self, sentencias: &[Stmt], entorno: &Arc<Mutex<Entorno>>) -> Result<(), Error> {
+        // La mayoría de bloques no declara nada: evitamos el recorrido completo.
+        if !sentencias
+            .iter()
+            .any(|stmt| matches!(stmt, Stmt::Funcion { .. } | Stmt::Clase { .. }))
+        {
+            return Ok(());
+        }
+
         // Primero funciones, para permitir llamadas mutuas.
         for stmt in sentencias {
             if let Stmt::Funcion {
@@ -371,7 +451,7 @@ impl Interprete {
         metodos: &[MetodoClase],
         entorno: &Arc<Mutex<Entorno>>,
     ) -> Clase {
-        let mut mapa = HashMap::new();
+        let mut mapa = MapaRapido::default();
         for metodo in metodos {
             let funcion = Funcion {
                 nombre: format!("{}.{}", nombre, metodo.nombre),
@@ -438,6 +518,23 @@ impl Interprete {
                 Ok(Flujo::Normal)
             }
             Stmt::Mientras { condicion, cuerpo } => {
+                // Si el bloque no declara nada nuevo, se ejecuta directamente en
+                // el ámbito padre y se evita un nivel de búsqueda por acceso.
+                if puede_reusar_ambito(entorno, cuerpo) {
+                    loop {
+                        if !valor_verdadero(&self.evaluar(condicion, entorno)?) {
+                            break;
+                        }
+                        match self.ejecutar_lista(cuerpo, entorno)? {
+                            Flujo::Normal | Flujo::Continuar => {}
+                            Flujo::Romper => break,
+                            Flujo::Retornar(v) => return Ok(Flujo::Retornar(v)),
+                        }
+                    }
+                    return Ok(Flujo::Normal);
+                }
+                // Ámbito propio por iteración: conserva la semántica de captura
+                // de cierres y de variables declaradas dentro del cuerpo.
                 loop {
                     if !valor_verdadero(&self.evaluar(condicion, entorno)?) {
                         break;
@@ -483,6 +580,11 @@ impl Interprete {
                     return Err(Error::ejecucion("el paso del bucle 'para' no puede ser 0"));
                 }
                 let entorno_bucle = Entorno::nuevo(Some(entorno.clone()));
+                {
+                    let mut e = entorno_bucle.lock().unwrap();
+                    e.definir(variable.clone(), Value::Entero(inicio));
+                }
+                let reusar = puede_reusar_ambito(&entorno_bucle, cuerpo);
                 let mut i = inicio;
                 loop {
                     if (paso > 0 && i > fin) || (paso < 0 && i < fin) {
@@ -491,8 +593,13 @@ impl Interprete {
                     entorno_bucle
                         .lock()
                         .unwrap()
-                        .definir(variable.clone(), Value::Entero(i));
-                    match self.ejecutar_bloque(cuerpo, &entorno_bucle)? {
+                        .fijar(variable, Value::Entero(i));
+                    let flujo = if reusar {
+                        self.ejecutar_lista(cuerpo, &entorno_bucle)?
+                    } else {
+                        self.ejecutar_bloque(cuerpo, &entorno_bucle)?
+                    };
+                    match flujo {
                         Flujo::Normal | Flujo::Continuar => {}
                         Flujo::Romper => break,
                         Flujo::Retornar(v) => return Ok(Flujo::Retornar(v)),
@@ -529,12 +636,19 @@ impl Interprete {
                     }
                 };
                 let entorno_bucle = Entorno::nuevo(Some(entorno.clone()));
+                {
+                    let mut e = entorno_bucle.lock().unwrap();
+                    e.definir(variable.clone(), Value::Nulo);
+                }
+                let reusar = puede_reusar_ambito(&entorno_bucle, cuerpo);
                 for elemento in elementos {
-                    entorno_bucle
-                        .lock()
-                        .unwrap()
-                        .definir(variable.clone(), elemento);
-                    match self.ejecutar_bloque(cuerpo, &entorno_bucle)? {
+                    entorno_bucle.lock().unwrap().fijar(variable, elemento);
+                    let flujo = if reusar {
+                        self.ejecutar_lista(cuerpo, &entorno_bucle)?
+                    } else {
+                        self.ejecutar_bloque(cuerpo, &entorno_bucle)?
+                    };
+                    match flujo {
                         Flujo::Normal | Flujo::Continuar => {}
                         Flujo::Romper => break,
                         Flujo::Retornar(v) => return Ok(Flujo::Retornar(v)),
@@ -589,18 +703,17 @@ impl Interprete {
         entorno: &Arc<Mutex<Entorno>>,
     ) -> Result<(), Error> {
         match objetivo {
-            Expr::Variable(nombre) => {
-                if Entorno::es_constante(entorno, nombre) {
-                    return Err(Error::ejecucion(format!(
-                        "no se puede reasignar la constante '{}'",
-                        nombre
-                    )));
-                }
-                if !Entorno::asignar(entorno, nombre, valor.clone()) {
+            Expr::Variable(nombre) => match Entorno::asignar(entorno, nombre, valor) {
+                Asignacion::Asignado => Ok(()),
+                Asignacion::Constante => Err(Error::ejecucion(format!(
+                    "no se puede reasignar la constante '{}'",
+                    nombre
+                ))),
+                Asignacion::NoExiste(valor) => {
                     entorno.lock().unwrap().definir(nombre.clone(), valor);
+                    Ok(())
                 }
-                Ok(())
-            }
+            },
             Expr::Miembro { objeto, nombre } => {
                 let obj = self.evaluar(objeto, entorno)?;
                 match obj {
@@ -731,14 +844,14 @@ impl Interprete {
             Expr::Llamada { callee, args } => {
                 if let Expr::Miembro { objeto, nombre } = callee.as_ref() {
                     let receptor = self.evaluar(objeto, entorno)?;
-                    let mut valores = Vec::with_capacity(args.len());
+                    let mut valores = self.tomar_args(args.len());
                     for arg in args {
                         valores.push(self.evaluar(arg, entorno)?);
                     }
                     return self.llamar_metodo(receptor, nombre, valores);
                 }
                 let callee = self.evaluar(callee, entorno)?;
-                let mut valores = Vec::with_capacity(args.len());
+                let mut valores = self.tomar_args(args.len());
                 for arg in args {
                     valores.push(self.evaluar(arg, entorno)?);
                 }
@@ -966,6 +1079,55 @@ impl Interprete {
         Ok(Value::Tarea(Arc::new(Tarea::nueva(handle))))
     }
 
+    /// Toma un vector de argumentos del reciclador.
+    fn tomar_args(&mut self, n: usize) -> Vec<Value> {
+        let mut valores = self.args_libres.pop().unwrap_or_default();
+        valores.clear();
+        if valores.capacity() < n {
+            valores.reserve(n);
+        }
+        valores
+    }
+
+    /// Devuelve un vector de argumentos al reciclador.
+    fn devolver_args(&mut self, mut valores: Vec<Value>) {
+        if self.args_libres.len() < 64 {
+            valores.clear();
+            self.args_libres.push(valores);
+        }
+    }
+
+    /// Obtiene un marco para una llamada, reutilizando uno libre si existe.
+    fn tomar_marco(&mut self, padre: &Arc<Mutex<Entorno>>) -> Arc<Mutex<Entorno>> {
+        if let Some(marco) = self.marcos_libres.pop() {
+            {
+                let mut e = marco.lock().unwrap();
+                e.valores.clear();
+                e.constantes.clear();
+                e.padre = Some(padre.clone());
+            }
+            marco
+        } else {
+            Entorno::nuevo(Some(padre.clone()))
+        }
+    }
+
+    /// Devuelve el marco al reciclador si ningún cierre lo capturó.
+    fn devolver_marco(&mut self, marco: Arc<Mutex<Entorno>>) {
+        if Arc::strong_count(&marco) != 1 {
+            return;
+        }
+        {
+            let mut e = marco.lock().unwrap();
+            e.valores.clear();
+            e.constantes.clear();
+            e.padre = None;
+        }
+        if self.marcos_libres.len() < 64 {
+            self.marcos_libres.push(marco);
+        }
+    }
+
     pub(crate) fn llamar_funcion_sincrona(
         &mut self,
         funcion: &Arc<Funcion>,
@@ -1001,11 +1163,15 @@ impl Interprete {
         }
 
         self.profundidad += 1;
-        let entorno = Entorno::nuevo(Some(funcion.entorno.clone()));
+        let entorno = self.tomar_marco(&funcion.entorno);
+        let mut args = args;
         let resultado = (|| -> Result<Flujo, Error> {
-            for (i, parametro) in funcion.parametros.iter().enumerate() {
-                let valor = if i < args.len() {
-                    args[i].clone()
+            let mut indice = 0;
+            for parametro in &funcion.parametros {
+                let valor = if indice < args.len() {
+                    let valor = std::mem::replace(&mut args[indice], Value::Nulo);
+                    indice += 1;
+                    valor
                 } else {
                     match &parametro.defecto {
                         Some(expr) => self.evaluar(expr, &entorno)?,
@@ -1021,6 +1187,8 @@ impl Interprete {
             self.ejecutar_lista(&funcion.cuerpo, &entorno)
         })();
         self.profundidad -= 1;
+        self.devolver_args(args);
+        self.devolver_marco(entorno);
 
         match resultado? {
             Flujo::Retornar(valor) => Ok(valor),
@@ -1033,7 +1201,7 @@ impl Interprete {
     fn instanciar(&mut self, clase: Arc<Clase>, args: Vec<Value>) -> Result<Value, Error> {
         let instancia = Arc::new(Mutex::new(Instancia {
             clase: clase.clone(),
-            campos: HashMap::new(),
+            campos: MapaValores::default(),
         }));
         let valor = Value::Instancia(instancia.clone());
         if let Some(iniciar) = buscar_metodo(&clase, "iniciar") {
@@ -1556,7 +1724,7 @@ impl Interprete {
 
     fn metodo_diccionario(
         &mut self,
-        dict: Arc<Mutex<HashMap<String, Value>>>,
+        dict: Arc<Mutex<MapaValores>>,
         nombre: &str,
         args: Vec<Value>,
     ) -> Result<Value, Error> {

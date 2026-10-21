@@ -1,7 +1,6 @@
 //! Valores en tiempo de ejecución.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
@@ -10,8 +9,12 @@ use std::thread::JoinHandle;
 use crate::ast::{Parametro, Stmt};
 use crate::error::Error;
 use crate::interprete::{Entorno, Interprete};
+use crate::rapido::MapaRapido;
 
 pub type NativaFn = fn(&mut Interprete, Vec<Value>) -> Result<Value, Error>;
+
+/// Mapa de claves de texto usado por diccionarios, instancias y módulos.
+pub type MapaValores = MapaRapido<String, Value>;
 
 pub struct Funcion {
     pub nombre: String,
@@ -24,17 +27,17 @@ pub struct Funcion {
 pub struct Clase {
     pub nombre: String,
     pub padre: Option<Arc<Clase>>,
-    pub metodos: HashMap<String, Arc<Funcion>>,
+    pub metodos: MapaRapido<String, Arc<Funcion>>,
 }
 
 pub struct Instancia {
     pub clase: Arc<Clase>,
-    pub campos: HashMap<String, Value>,
+    pub campos: MapaValores,
 }
 
 pub struct Modulo {
     pub nombre: String,
-    pub miembros: HashMap<String, Value>,
+    pub miembros: MapaValores,
 }
 
 pub struct Nativa {
@@ -95,7 +98,7 @@ pub enum Value {
     Logico(bool),
     Nulo,
     Lista(Arc<Mutex<Vec<Value>>>),
-    Diccionario(Arc<Mutex<HashMap<String, Value>>>),
+    Diccionario(Arc<Mutex<MapaValores>>),
     Funcion(Arc<Funcion>),
     Nativa(Arc<Nativa>),
     Clase(Arc<Clase>),
@@ -115,7 +118,7 @@ impl Value {
     }
 
     pub fn diccionario(pares: Vec<(String, Value)>) -> Value {
-        let mut mapa = HashMap::new();
+        let mut mapa = MapaValores::default();
         for (clave, valor) in pares {
             mapa.insert(clave, valor);
         }
@@ -179,7 +182,7 @@ impl Value {
                 if profundidad > 50 {
                     return "{...}".to_string();
                 }
-                let mapa: HashMap<String, Value> = dict.lock().unwrap().clone();
+                let mapa: MapaValores = dict.lock().unwrap().clone();
                 let mut claves: Vec<String> = mapa.keys().cloned().collect();
                 claves.sort();
                 let pares: Vec<String> = claves

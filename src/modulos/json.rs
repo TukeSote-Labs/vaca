@@ -1,12 +1,11 @@
 //! Módulo `json`: parse y stringify sin dependencias externas.
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::error::Error;
 use crate::interprete::Interprete;
 use crate::modulos::crear_modulo;
-use crate::value::Value;
+use crate::value::{MapaValores, Value};
 
 pub fn modulo() -> Value {
     crear_modulo(
@@ -170,7 +169,7 @@ impl ParserJson {
 
     fn objeto(&mut self) -> Result<Value, String> {
         self.pos += 1; // {
-        let mut mapa = HashMap::new();
+        let mut mapa = MapaValores::default();
         self.saltar_espacios();
         if self.actual() == Some('}') {
             self.pos += 1;

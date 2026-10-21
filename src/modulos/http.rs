@@ -10,7 +10,7 @@ use std::time::Duration;
 use crate::error::Error;
 use crate::interprete::Interprete;
 use crate::modulos::{crear_modulo, json};
-use crate::value::Value;
+use crate::value::{MapaValores, Value};
 
 pub fn modulo() -> Value {
     crear_modulo(
@@ -579,7 +579,7 @@ fn peticion(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     let cuerpo = args.get(2).map(|v| v.a_texto()).unwrap_or_default();
     let cabeceras_extra = match args.get(3) {
         Some(Value::Diccionario(d)) => d.lock().unwrap().clone(),
-        None => HashMap::new(),
+        None => MapaValores::default(),
         Some(otro) => {
             return Err(Error::ejecucion(format!(
                 "las cabeceras de http.peticion deben ser un diccionario, se recibió {}",

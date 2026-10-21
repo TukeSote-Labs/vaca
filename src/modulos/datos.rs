@@ -7,7 +7,9 @@ use std::path::Path;
 use crate::error::Error;
 use crate::interprete::Interprete;
 use crate::modulos::crear_modulo;
-use crate::value::{clave_texto, comparar_orden, valor_verdadero, valores_iguales, Value};
+use crate::value::{
+    clave_texto, comparar_orden, valor_verdadero, valores_iguales, MapaValores, Value,
+};
 
 pub fn modulo() -> Value {
     crear_modulo(
@@ -550,7 +552,7 @@ fn desde_json(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
 
     let mut columnas: Vec<String> = Vec::new();
     let mut vistos: HashMap<String, ()> = HashMap::new();
-    let mut filas_crudas: Vec<HashMap<String, Value>> = Vec::new();
+    let mut filas_crudas: Vec<MapaValores> = Vec::new();
     for elemento in &lista {
         let dict = match elemento {
             Value::Diccionario(d) => d.lock().unwrap().clone(),

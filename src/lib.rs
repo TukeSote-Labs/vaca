@@ -7,6 +7,7 @@ pub mod interprete;
 pub mod lexer;
 pub mod modulos;
 pub mod parser;
+pub mod rapido;
 pub mod token;
 pub mod value;
 
