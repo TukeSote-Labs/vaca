@@ -15,12 +15,12 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 64 pruebas automatizadas y ejemplos ejecutables.
+- 75 pruebas automatizadas y ejemplos ejecutables.
 
-> **Estado:** intérprete de árbol funcional con análisis semántico previo de
-> variables locales no usadas y concurrencia real basada en hilos. No usa
-> bytecode; consulta [Estado de las fases](#estado-de-las-fases) y
-> [Limitaciones](#limitaciones).
+> **Estado:** compilador a bytecode con VM de pila para funciones, con
+> intérprete de árbol como respaldo para las construcciones que la VM aún no
+> cubre. Análisis semántico previo de variables locales no usadas y
+> concurrencia real basada en hilos.
 
 ## Documentación
 
@@ -820,37 +820,46 @@ http.servidor("0.0.0.0", 8090, manejador, 1000)
 
 ## Rendimiento
 
-El intérprete está optimizado para ejecutar código de servidor sin
-dependencias externas:
+Vaca compila cada función a bytecode y la ejecuta en una VM de pila
+(`src/compilador.rs`, `src/bytecode.rs`). Las variables se resuelven a
+posiciones fijas de un marco (`Vec<Option<Value>>`), sin hashing ni recorrido
+de ámbitos dentro de los bucles.
 
-- **Hasher FNV-1a** en lugar de SipHash para variables, diccionarios,
-  instancias y módulos (`src/rapido.rs`).
-- **Ámbitos sin asignaciones**: los bloques que no declaran variables nuevas se
-  ejecutan directamente en el ámbito padre; los bucles no crean un entorno por
-  iteración.
-- **Reciclado de marcos y argumentos** en las llamadas a función.
-- **Asignación en un solo recorrido** y sin reasignar claves de texto.
-
-Los `Value::Texto` y los diccionarios siguen usando `String`, así que el código
-con mucha manipulación de texto paga el coste de clonar cadenas al leerlas.
+- **Compilación perezosa y compartida**: cada `Funcion` compila su cuerpo la
+  primera vez que se llama (`OnceLock`), y las versiones enlazadas de un método
+  comparten el mismo bytecode.
+- **Respaldo seguro**: si una función usa cierres, `intentar`/`atrapar`,
+  funciones o clases anidadas, o `importar`, el intérprete de árbol la ejecuta
+  sin cambios de semántica.
+- **Superinstrucciones**: condiciones de bucle en una sola instrucción,
+  `x = x + k` en una sola instrucción y bucles `para` con contador nativo.
+- **Hasher FNV-1a** para variables, diccionarios, instancias y módulos.
+- **Reciclado de marcos, locales y argumentos** entre llamadas.
 
 Banco de estrés (escala 1, binario `--release`, misma máquina):
 
-| Prueba | Vaca | Python 3 |
-| :--- | ---: | ---: |
-| aritmetica (2M) | 348 ms | 111 ms |
-| fib(25) | 45 ms | 6 ms |
-| listas (100k) | 45 ms | 15 ms |
-| diccionarios (200k) | 94 ms | 27 ms |
-| texto (50k) | 28 ms | 8 ms |
-| llamadas (500k) | 124 ms | 24 ms |
-| **TOTAL** | **~730 ms** | **~190 ms** |
+| Prueba | Árbol (antes) | VM (ahora) | Python 3 |
+| :--- | ---: | ---: | ---: |
+| aritmetica (2M) | 844 ms | 153 ms | 111 ms |
+| fib(25) | 78 ms | 26 ms | 6 ms |
+| listas (100k) | 84 ms | 36 ms | 15 ms |
+| diccionarios (200k) | 170 ms | 61 ms | 27 ms |
+| texto (50k) | 47 ms | 17 ms | 8 ms |
+| llamadas (500k) | 283 ms | 64 ms | 24 ms |
+| **TOTAL** | **~1530 ms** | **~359 ms** | **~190 ms** |
 
-Usa siempre el binario `--release`: con `cargo run` (debug) el mismo banco
-tarda más del doble. La diferencia restante frente a Python está en la
-arquitectura: Vaca recorre el árbol con ámbitos basados en mapas, mientras
-CPython ejecuta bytecode con variables en posiciones fijas. Cerrar esa brecha
-del todo requiere compilar a bytecode con marcos por posiciones.
+Usa siempre el binario `--release`: con `cargo run` (debug) el banco tarda más
+del doble. Para comparar en tu máquina, desactiva la VM y ejecuta el mismo
+programa con el intérprete de árbol:
+
+```bash
+vaca estres.vaca                 # con la VM de bytecode
+VACA_SIN_VM=1 vaca estres.vaca   # solo intérprete de árbol
+```
+
+En bucles ajustados Vaca queda a ~1.4x de CPython; la diferencia restante está
+en que Python usa valores de 8 bytes y cachés de globales en su bytecode,
+mientras Vaca mueve `Value` de 24 bytes y resuelve globales por entorno.
 
 ---
 
@@ -903,7 +912,7 @@ landing/            Landing del lenguaje (Astro + Bun)
 | 1 | Lexer en español | Completa |
 | 2 | Parser y AST con llaves | Completa |
 | 3 | Intérprete de árbol | Completa |
-| 4 | Compilador a bytecode y VM | **No implementada**: se optó por intérprete de árbol para mantener el proyecto simple |
+| 4 | Compilador a bytecode y VM | **Parcial**: VM de pila para funciones compilables; `intentar`, cierres anidados e `importar` usan el intérprete de árbol |
 | 5 | Funciones, cierres, defaults, recursividad | Completa |
 | 6 | Listas, diccionarios y métodos nativos | Completa |
 | 7 | POO: clases, herencia, `este`, `iniciar`, abstracción | Completa |
@@ -917,8 +926,9 @@ landing/            Landing del lenguaje (Astro + Bun)
 
 ## Limitaciones
 
-- **Intérprete de árbol, no bytecode.** Es más simple y suficiente para
-  scripts y APIs pequeñas, pero más lento que una VM.
+- **VM parcial con respaldo de árbol.** Las funciones con `intentar`/`atrapar`,
+  cierres creados en su interior, funciones o clases anidadas, o `importar`
+  siguen ejecutándose con el intérprete de árbol.
 - **Concurrencia basada en hilos del sistema.** Cada `async fn` y cada
   conexión HTTP crea un hilo (8 MiB de pila reservada). Es concurrencia real y
   suficiente para un laboratorio de estrés o una API moderada, pero no es un
@@ -949,11 +959,11 @@ landing/            Landing del lenguaje (Astro + Bun)
 
 ## Próximos pasos razonables
 
-1. Compilar el AST a bytecode y añadir una VM con pila.
+1. Ampliar la VM a `intentar`/`atrapar`, cierres creados en funciones
+   compiladas e `importar`.
 2. Pool de hilos acotado o event loop para reducir el coste por tarea.
 3. Analizador semántico opcional que valide las anotaciones de tipo.
 4. Formateador (`vaca fmt`) y gestor de paquetes.
-5. Extensiones de editor para resaltado y autocompletado.
 
 ---
 

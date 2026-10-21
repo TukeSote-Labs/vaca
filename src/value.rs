@@ -3,10 +3,11 @@
 use std::cmp::Ordering;
 use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering as AtomicOrdering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::JoinHandle;
 
 use crate::ast::{Parametro, Stmt};
+use crate::bytecode::Chunk;
 use crate::error::Error;
 use crate::interprete::{Entorno, Interprete};
 use crate::rapido::MapaRapido;
@@ -22,6 +23,8 @@ pub struct Funcion {
     pub cuerpo: Vec<Stmt>,
     pub entorno: Arc<Mutex<Entorno>>,
     pub es_async: bool,
+    /// Bytecode compilado (se calcula la primera vez que se llama).
+    pub compilado: Arc<OnceLock<Option<Arc<Chunk>>>>,
 }
 
 pub struct Clase {

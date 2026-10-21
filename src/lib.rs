@@ -2,6 +2,8 @@
 
 pub mod analizador;
 pub mod ast;
+pub mod bytecode;
+pub mod compilador;
 pub mod error;
 pub mod interprete;
 pub mod lexer;

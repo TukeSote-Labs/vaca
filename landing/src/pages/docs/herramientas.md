@@ -185,6 +185,28 @@ python3 scripts/probar_concurrencia.py
 - `probar_concurrencia.py` lanza 50 peticiones lentas simultáneas y comprueba
   el paralelismo y los contadores atómicos.
 
+## VM de bytecode
+
+Las funciones se compilan a bytecode la primera vez que se llaman y se ejecutan
+en una VM de pila. Las variables pasan a ser posiciones fijas del marco, así
+que dentro de un bucle no se buscan nombres ni se recorren ámbitos.
+
+```bash
+vaca estres.vaca                 # ejecuta con la VM de bytecode
+VACA_SIN_VM=1 vaca estres.vaca   # fuerza solo el intérprete de árbol
+```
+
+Sustituye `estres.vaca` por tu programa. `VACA_SIN_VM` sirve para comparar el
+rendimiento de ambos motores en la misma máquina y para aislar fallos: si un
+programa funciona sin VM y falla con ella, el problema está en el compilador de
+bytecode.
+
+La VM cubre variables, bucles, condicionales, funciones, recursión, parámetros
+por defecto, listas, diccionarios, índices, miembros, interpolación, `nuevo` y
+`lanzar`. Se ejecutan con el intérprete de árbol las funciones que usan
+`intentar`/`atrapar` o `importar`, las que crean cierres en su interior, las que
+declaran funciones o clases anidadas y las funciones `async`.
+
 ## Diagnóstico de errores
 
 ### Errores de compilación
@@ -233,7 +255,7 @@ No imprimas secretos ni cuerpos completos en producción. Para carga, usa
 
 ## Límites conocidos
 
-- No hay compilador a bytecode: es un intérprete de árbol.
+- La VM cubre funciones y bucles; `intentar`/`atrapar`, cierres creados dentro de una función, funciones o clases anidadas e `importar` usan el intérprete de árbol.
 - No hay comprobación estática de tipos ni recolector de basura.
 - No hay formateador (`vaca fmt`), gestor de paquetes, LSP ni `vaca test`.
 - No hay TLS nativo.

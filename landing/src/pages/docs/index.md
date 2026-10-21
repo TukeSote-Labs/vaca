@@ -20,7 +20,7 @@ concurrencia, los ejemplos de uso, las herramientas y una referencia rápida.
 | Sintaxis | Español, llaves `{ }`, `;` opcional |
 | Tipado | Dinámico con anotaciones opcionales informativas |
 | Paradigma | Imperativo, funcional y orientado a objetos |
-| Motor | Intérprete de árbol escrito en Rust |
+| Motor | Compilador a bytecode y VM de pila en Rust |
 | Concurrencia | Hilos del sistema, `async`/`esperar`, contadores atómicos |
 | Biblioteca | JSON, matemáticas, tiempo, sistema, archivos, texto, CSV/DataFrames, HTTP y concurrencia |
 | Dependencias | Cero (solo Rust estándar) |
@@ -132,9 +132,11 @@ Ada
 ## Estado del proyecto
 
 Vaca está en la versión **0.1.0**. El lenguaje, la biblioteca estándar, la
-concurrencia real y el servidor HTTP están implementados. Todavía no hay
-compilador a bytecode, comprobación estática de tipos, recolector de basura,
-formateador, gestor de paquetes ni TLS.
+concurrencia real y el servidor HTTP están implementados. Las funciones se
+compilan a bytecode y se ejecutan en una VM de pila, con el intérprete de árbol
+como respaldo para `intentar`, cierres anidados e `importar`. Todavía no hay
+comprobación estática de tipos, recolector de basura, formateador, gestor de
+paquetes ni TLS.
 
 Consulta la [referencia rápida](/docs/referencia/#limitaciones) para ver la
 lista completa de límites antes de llevar Vaca a producción.

@@ -173,7 +173,7 @@ http.servidor(8080, fn(peticion) {
 
 ## Limitaciones
 
-- **Intérprete de árbol**, no bytecode. Más simple, más lento que una VM.
+- **VM parcial con respaldo de árbol**: las funciones con `intentar`/`atrapar`, cierres creados en su interior o `importar` se interpretan sobre el árbol.
 - **Tipado dinámico**: las anotaciones son informativas.
 - **Sin recolector de basura**: los ciclos de `Arc` no se liberan.
 - **Sin `super`**: no se puede llamar explícitamente al método del padre.

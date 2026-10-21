@@ -5,9 +5,10 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicI64;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::ast::{Expr, MetodoClase, OpBinario, OpUnario, Stmt};
+use crate::bytecode::{Chunk, Op, Operando};
 use crate::error::Error;
 use crate::modulos;
 use crate::parser::Parser;
@@ -154,6 +155,12 @@ pub struct Interprete {
     marcos_libres: Vec<Arc<Mutex<Entorno>>>,
     /// Vectores de argumentos reciclables.
     args_libres: Vec<Vec<Value>>,
+    /// Pila de valores de la VM.
+    pila_vm: Vec<Value>,
+    /// Locales de marcos de la VM reciclables.
+    locales_libres: Vec<Vec<Option<Value>>>,
+    /// Permite desactivar la VM (`VACA_SIN_VM=1`) para comparar rendimiento.
+    usar_vm: bool,
 }
 
 /// Indica si un bloque puede ejecutarse en el ámbito padre sin crear uno nuevo.
@@ -190,6 +197,9 @@ impl Interprete {
             importando: HashSet::new(),
             marcos_libres: Vec::new(),
             args_libres: Vec::new(),
+            pila_vm: Vec::new(),
+            locales_libres: Vec::new(),
+            usar_vm: std::env::var_os("VACA_SIN_VM").is_none(),
         };
         interprete.registrar_globales();
         interprete
@@ -216,6 +226,9 @@ impl Interprete {
             importando: HashSet::new(),
             marcos_libres: Vec::new(),
             args_libres: Vec::new(),
+            pila_vm: Vec::new(),
+            locales_libres: Vec::new(),
+            usar_vm: self.usar_vm,
         }
     }
 
@@ -400,6 +413,7 @@ impl Interprete {
                     cuerpo: cuerpo.clone(),
                     entorno: entorno.clone(),
                     es_async: *es_async,
+                    compilado: Arc::new(OnceLock::new()),
                 };
                 entorno
                     .lock()
@@ -459,6 +473,7 @@ impl Interprete {
                 cuerpo: metodo.cuerpo.clone(),
                 entorno: entorno.clone(),
                 es_async: metodo.es_async,
+                compilado: Arc::new(OnceLock::new()),
             };
             mapa.insert(metodo.nombre.clone(), Arc::new(funcion));
         }
@@ -910,6 +925,7 @@ impl Interprete {
                 cuerpo: cuerpo.clone(),
                 entorno: entorno.clone(),
                 es_async: *es_async,
+                compilado: Arc::new(OnceLock::new()),
             }))),
             Expr::Esperar(expr) => {
                 let valor = self.evaluar(expr, entorno)?;
@@ -1128,6 +1144,548 @@ impl Interprete {
         }
     }
 
+    /// Devuelve el código compilado de una función, compilándolo la primera vez.
+    fn chunk_de(&mut self, funcion: &Arc<Funcion>) -> Option<Arc<Chunk>> {
+        if funcion.es_async {
+            return None;
+        }
+        funcion
+            .compilado
+            .get_or_init(|| crate::compilador::compilar(funcion).map(Arc::new))
+            .clone()
+    }
+
+    fn tomar_locales(&mut self, n: usize) -> Vec<Option<Value>> {
+        let mut locales = self.locales_libres.pop().unwrap_or_default();
+        locales.clear();
+        locales.resize(n, None);
+        locales
+    }
+
+    fn devolver_locales(&mut self, mut locales: Vec<Option<Value>>) {
+        if self.locales_libres.len() < 64 {
+            locales.clear();
+            self.locales_libres.push(locales);
+        }
+    }
+
+    /// Ejecuta una función compilada en la máquina virtual.
+    fn ejecutar_vm(
+        &mut self,
+        funcion: &Arc<Funcion>,
+        chunk: &Chunk,
+        args: Vec<Value>,
+    ) -> Result<Value, Error> {
+        let base = self.pila_vm.len();
+        let mut locales = self.tomar_locales(chunk.max_locales as usize);
+        let mut args = args;
+        for (indice, arg) in args.iter_mut().enumerate() {
+            if indice < locales.len() {
+                locales[indice] = Some(std::mem::replace(arg, Value::Nulo));
+            }
+        }
+        self.devolver_args(args);
+
+        let resultado = self.correr_vm(funcion, chunk, &mut locales);
+
+        self.pila_vm.truncate(base);
+        self.devolver_locales(locales);
+        resultado
+    }
+
+    fn correr_vm(
+        &mut self,
+        funcion: &Arc<Funcion>,
+        chunk: &Chunk,
+        locales: &mut [Option<Value>],
+    ) -> Result<Value, Error> {
+        let mut ip = 0usize;
+
+        macro_rules! pila_pop {
+            () => {
+                match self.pila_vm.pop() {
+                    Some(valor) => valor,
+                    None => return Err(Error::ejecucion("pila de la VM vacía")),
+                }
+            };
+        }
+
+        macro_rules! local {
+            ($slot:expr) => {
+                match locales[$slot as usize].as_ref() {
+                    Some(valor) => valor.clone(),
+                    None => {
+                        let nombre = chunk
+                            .nombres_locales
+                            .get($slot as usize)
+                            .map(String::as_str)
+                            .unwrap_or("");
+                        return Err(Error::ejecucion(format!(
+                            "la variable '{}' no está definida",
+                            nombre
+                        )));
+                    }
+                }
+            };
+        }
+
+        macro_rules! aritmetica {
+            ($op:expr, $rapido:expr) => {{
+                let der = pila_pop!();
+                let izq = pila_pop!();
+                let valor = match (&izq, &der) {
+                    (Value::Entero(a), Value::Entero(b)) => match $rapido(*a, *b) {
+                        Some(n) => Value::Entero(n),
+                        None => return Err(Error::ejecucion("desbordamiento de enteros")),
+                    },
+                    _ => self.operar($op, izq, der)?,
+                };
+                self.pila_vm.push(valor);
+                ip += 1;
+            }};
+        }
+
+        macro_rules! comparacion {
+            ($op:expr, $cmp:tt) => {{
+                let der = pila_pop!();
+                let izq = pila_pop!();
+                let valor = match (&izq, &der) {
+                    (Value::Entero(a), Value::Entero(b)) => Value::Logico(a $cmp b),
+                    (Value::Decimal(a), Value::Decimal(b)) => Value::Logico(a $cmp b),
+                    _ => self.operar($op, izq, der)?,
+                };
+                self.pila_vm.push(valor);
+                ip += 1;
+            }};
+        }
+
+        loop {
+            if ip >= chunk.codigo.len() {
+                return Ok(Value::Nulo);
+            }
+            let op = chunk.codigo[ip];
+            match op {
+                Op::Constante(indice) => {
+                    let valor = chunk.constantes[indice as usize].clone();
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::Nulo => {
+                    self.pila_vm.push(Value::Nulo);
+                    ip += 1;
+                }
+                Op::Verdadero => {
+                    self.pila_vm.push(Value::Logico(true));
+                    ip += 1;
+                }
+                Op::Falso => {
+                    self.pila_vm.push(Value::Logico(false));
+                    ip += 1;
+                }
+                Op::CargarLocal(slot) => {
+                    let valor = local!(slot);
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::GuardarLocal(slot) => {
+                    let valor = pila_pop!();
+                    locales[slot as usize] = Some(valor);
+                    ip += 1;
+                }
+                Op::SumarLocalConst { local, constante } => {
+                    let actual = local!(local);
+                    let incremento = chunk.constantes[constante as usize].clone();
+                    let nuevo = self.operar(OpBinario::Suma, actual, incremento)?;
+                    locales[local as usize] = Some(nuevo);
+                    ip += 1;
+                }
+                Op::RestarLocalConst { local, constante } => {
+                    let actual = local!(local);
+                    let incremento = chunk.constantes[constante as usize].clone();
+                    let nuevo = self.operar(OpBinario::Resta, actual, incremento)?;
+                    locales[local as usize] = Some(nuevo);
+                    ip += 1;
+                }
+                Op::SaltoCondicional(indice) => {
+                    let datos = chunk.condicionales[indice as usize];
+                    let izquierda = operando_vm(locales, chunk, datos.izquierda)?;
+                    let derecha = operando_vm(locales, chunk, datos.derecha)?;
+                    let resultado = comparar_condicional(izquierda, derecha, datos.operador)?;
+                    if resultado {
+                        ip += 1;
+                    } else {
+                        ip = datos.destino as usize;
+                    }
+                }
+                Op::SaltarSiDefinido { local, destino } => {
+                    if locales[local as usize].is_some() {
+                        ip = destino as usize;
+                    } else {
+                        ip += 1;
+                    }
+                }
+                Op::CargarExterna(indice) => {
+                    let nombre = &chunk.nombres[indice as usize];
+                    let valor = Entorno::obtener(&funcion.entorno, nombre).ok_or_else(|| {
+                        Error::ejecucion(format!("la variable '{}' no está definida", nombre))
+                    })?;
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::Pop => {
+                    pila_pop!();
+                    ip += 1;
+                }
+                Op::Sumar => aritmetica!(OpBinario::Suma, i64::checked_add),
+                Op::Restar => aritmetica!(OpBinario::Resta, i64::checked_sub),
+                Op::Multiplicar => aritmetica!(OpBinario::Multiplicacion, i64::checked_mul),
+                Op::Dividir => {
+                    let der = pila_pop!();
+                    let izq = pila_pop!();
+                    let valor = match (&izq, &der) {
+                        (Value::Entero(a), Value::Entero(b)) => {
+                            if *b == 0 {
+                                return Err(Error::ejecucion("división entre cero"));
+                            }
+                            Value::Entero(a / b)
+                        }
+                        _ => self.operar(OpBinario::Division, izq, der)?,
+                    };
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::Modulo => {
+                    let der = pila_pop!();
+                    let izq = pila_pop!();
+                    let valor = match (&izq, &der) {
+                        (Value::Entero(a), Value::Entero(b)) => {
+                            if *b == 0 {
+                                return Err(Error::ejecucion("módulo entre cero"));
+                            }
+                            Value::Entero(a % b)
+                        }
+                        _ => self.operar(OpBinario::Modulo, izq, der)?,
+                    };
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::Igual => {
+                    let der = pila_pop!();
+                    let izq = pila_pop!();
+                    let valor = match (&izq, &der) {
+                        (Value::Entero(a), Value::Entero(b)) => Value::Logico(a == b),
+                        (Value::Texto(a), Value::Texto(b)) => Value::Logico(a == b),
+                        (Value::Logico(a), Value::Logico(b)) => Value::Logico(a == b),
+                        _ => self.operar(OpBinario::Igual, izq, der)?,
+                    };
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::Distinto => {
+                    let der = pila_pop!();
+                    let izq = pila_pop!();
+                    let valor = match (&izq, &der) {
+                        (Value::Entero(a), Value::Entero(b)) => Value::Logico(a != b),
+                        (Value::Texto(a), Value::Texto(b)) => Value::Logico(a != b),
+                        (Value::Logico(a), Value::Logico(b)) => Value::Logico(a != b),
+                        _ => self.operar(OpBinario::Distinto, izq, der)?,
+                    };
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::Menor => comparacion!(OpBinario::Menor, <),
+                Op::Mayor => comparacion!(OpBinario::Mayor, >),
+                Op::MenorIgual => comparacion!(OpBinario::MenorIgual, <=),
+                Op::MayorIgual => comparacion!(OpBinario::MayorIgual, >=),
+                Op::No => {
+                    let valor = pila_pop!();
+                    self.pila_vm.push(Value::Logico(!valor_verdadero(&valor)));
+                    ip += 1;
+                }
+                Op::Negativo => {
+                    let valor = pila_pop!();
+                    let resultado = match valor {
+                        Value::Entero(n) => Value::Entero(-n),
+                        Value::Decimal(n) => Value::Decimal(-n),
+                        otro => {
+                            return Err(Error::ejecucion(format!(
+                                "el operador '-' necesita un número, se recibió {}",
+                                otro.tipo_nombre()
+                            )))
+                        }
+                    };
+                    self.pila_vm.push(resultado);
+                    ip += 1;
+                }
+                Op::Positivo => {
+                    let valor = pila_pop!();
+                    match &valor {
+                        Value::Entero(_) | Value::Decimal(_) => {}
+                        otro => {
+                            return Err(Error::ejecucion(format!(
+                                "el operador '+' necesita un número, se recibió {}",
+                                otro.tipo_nombre()
+                            )))
+                        }
+                    }
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::Saltar(destino) => {
+                    ip = destino as usize;
+                }
+                Op::SaltarSiFalso(destino) => {
+                    let valor = pila_pop!();
+                    if valor_verdadero(&valor) {
+                        ip += 1;
+                    } else {
+                        ip = destino as usize;
+                    }
+                }
+                Op::SaltarSiVerdadero(destino) => {
+                    let valor = pila_pop!();
+                    if valor_verdadero(&valor) {
+                        ip = destino as usize;
+                    } else {
+                        ip += 1;
+                    }
+                }
+                Op::Llamar(cantidad) => {
+                    let n = cantidad as usize;
+                    let mut argumentos = self.tomar_args(n);
+                    let inicio = self.pila_vm.len() - n;
+                    argumentos.extend(self.pila_vm.drain(inicio..));
+                    let callee = pila_pop!();
+                    let resultado = self.llamar(callee, argumentos)?;
+                    self.pila_vm.push(resultado);
+                    ip += 1;
+                }
+                Op::LlamarMetodo { nombre, args } => {
+                    let n = args as usize;
+                    let mut argumentos = self.tomar_args(n);
+                    let inicio = self.pila_vm.len() - n;
+                    argumentos.extend(self.pila_vm.drain(inicio..));
+                    let receptor = pila_pop!();
+                    let metodo = chunk.nombres[nombre as usize].clone();
+                    let resultado = self.llamar_metodo(receptor, &metodo, argumentos)?;
+                    self.pila_vm.push(resultado);
+                    ip += 1;
+                }
+                Op::CargarMiembro(indice) => {
+                    let objeto = pila_pop!();
+                    let nombre = chunk.nombres[indice as usize].clone();
+                    let valor = self.obtener_miembro(objeto, &nombre)?;
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::GuardarMiembro(indice) => {
+                    let objeto = pila_pop!();
+                    let valor = pila_pop!();
+                    let nombre = chunk.nombres[indice as usize].clone();
+                    match objeto {
+                        Value::Instancia(instancia) => {
+                            instancia.lock().unwrap().campos.insert(nombre, valor);
+                        }
+                        Value::Diccionario(dict) => {
+                            dict.lock().unwrap().insert(nombre, valor);
+                        }
+                        otro => {
+                            return Err(Error::ejecucion(format!(
+                                "no se puede asignar el campo '{}' sobre un valor de tipo {}",
+                                nombre,
+                                otro.tipo_nombre()
+                            )))
+                        }
+                    }
+                    ip += 1;
+                }
+                Op::CargarIndice => {
+                    let indice = pila_pop!();
+                    let objeto = pila_pop!();
+                    let valor = match objeto {
+                        Value::Lista(lista) => {
+                            let posicion = indice_de_lista(&indice, lista.lock().unwrap().len())?;
+                            lista.lock().unwrap()[posicion].clone()
+                        }
+                        Value::Diccionario(dict) => {
+                            let clave = clave_texto(&indice);
+                            let valor = dict.lock().unwrap().get(&clave).cloned();
+                            valor.unwrap_or(Value::Nulo)
+                        }
+                        Value::Texto(texto) => {
+                            let caracteres: Vec<char> = texto.chars().collect();
+                            let posicion = indice_de_lista(&indice, caracteres.len())?;
+                            Value::Texto(caracteres[posicion].to_string())
+                        }
+                        otro => {
+                            return Err(Error::ejecucion(format!(
+                                "no se puede indexar un valor de tipo {}",
+                                otro.tipo_nombre()
+                            )))
+                        }
+                    };
+                    self.pila_vm.push(valor);
+                    ip += 1;
+                }
+                Op::GuardarIndice => {
+                    let indice = pila_pop!();
+                    let objeto = pila_pop!();
+                    let valor = pila_pop!();
+                    match objeto {
+                        Value::Lista(lista) => {
+                            let posicion = indice_de_lista(&indice, lista.lock().unwrap().len())?;
+                            lista.lock().unwrap()[posicion] = valor;
+                        }
+                        Value::Diccionario(dict) => {
+                            dict.lock().unwrap().insert(clave_texto(&indice), valor);
+                        }
+                        otro => {
+                            return Err(Error::ejecucion(format!(
+                                "no se puede indexar un valor de tipo {}",
+                                otro.tipo_nombre()
+                            )))
+                        }
+                    }
+                    ip += 1;
+                }
+                Op::Longitud => {
+                    let valor = pila_pop!();
+                    let longitud = match &valor {
+                        Value::Texto(texto) => texto.chars().count() as i64,
+                        Value::Lista(lista) => lista.lock().unwrap().len() as i64,
+                        Value::Diccionario(dict) => dict.lock().unwrap().len() as i64,
+                        otro => {
+                            return Err(Error::ejecucion(format!(
+                                "'longitud' no admite un valor de tipo {}",
+                                otro.tipo_nombre()
+                            )))
+                        }
+                    };
+                    self.pila_vm.push(Value::Entero(longitud));
+                    ip += 1;
+                }
+                Op::Lista(cantidad) => {
+                    let n = cantidad as usize;
+                    let inicio = self.pila_vm.len() - n;
+                    let valores: Vec<Value> = self.pila_vm.drain(inicio..).collect();
+                    self.pila_vm.push(Value::lista(valores));
+                    ip += 1;
+                }
+                Op::Diccionario(cantidad) => {
+                    let n = cantidad as usize * 2;
+                    let inicio = self.pila_vm.len() - n;
+                    let crudos: Vec<Value> = self.pila_vm.drain(inicio..).collect();
+                    let mut pares = Vec::with_capacity(cantidad as usize);
+                    for par in crudos.as_chunks::<2>().0 {
+                        pares.push((clave_texto(&par[0]), par[1].clone()));
+                    }
+                    self.pila_vm.push(Value::diccionario(pares));
+                    ip += 1;
+                }
+                Op::Iterable => {
+                    let valor = pila_pop!();
+                    let elementos = match &valor {
+                        Value::Lista(lista) => lista.lock().unwrap().clone(),
+                        Value::Texto(texto) => {
+                            texto.chars().map(|c| Value::Texto(c.to_string())).collect()
+                        }
+                        Value::Diccionario(dict) => {
+                            let mut claves: Vec<String> =
+                                dict.lock().unwrap().keys().cloned().collect();
+                            claves.sort();
+                            claves.into_iter().map(Value::Texto).collect()
+                        }
+                        otro => {
+                            return Err(Error::ejecucion(format!(
+                                "no se puede iterar sobre un valor de tipo {}",
+                                otro.tipo_nombre()
+                            )))
+                        }
+                    };
+                    self.pila_vm.push(Value::lista(elementos));
+                    ip += 1;
+                }
+                Op::Interpolar(cantidad) => {
+                    let n = cantidad as usize;
+                    let inicio = self.pila_vm.len() - n;
+                    let valores: Vec<Value> = self.pila_vm.drain(inicio..).collect();
+                    let mut texto = String::new();
+                    for valor in valores {
+                        texto.push_str(&valor.a_texto());
+                    }
+                    self.pila_vm.push(Value::Texto(texto));
+                    ip += 1;
+                }
+                Op::Nuevo { clase, args } => {
+                    let n = args as usize;
+                    let mut argumentos = self.tomar_args(n);
+                    let inicio = self.pila_vm.len() - n;
+                    argumentos.extend(self.pila_vm.drain(inicio..));
+                    let nombre = chunk.nombres[clase as usize].clone();
+                    let valor = Entorno::obtener(&funcion.entorno, &nombre).ok_or_else(|| {
+                        Error::ejecucion(format!("la clase '{}' no está definida", nombre))
+                    })?;
+                    let resultado = match valor {
+                        Value::Clase(clase) => self.instanciar(clase, argumentos)?,
+                        _ => return Err(Error::ejecucion(format!("'{}' no es una clase", nombre))),
+                    };
+                    self.pila_vm.push(resultado);
+                    ip += 1;
+                }
+                Op::AEntero => {
+                    let valor = pila_pop!();
+                    let entero = valor.a_entero_exacto().ok_or_else(|| {
+                        Error::ejecucion("el bucle 'para' necesita valores enteros")
+                    })?;
+                    self.pila_vm.push(Value::Entero(entero));
+                    ip += 1;
+                }
+                Op::VerificarPaso(slot) => {
+                    if matches!(locales[slot as usize], Some(Value::Entero(0))) {
+                        return Err(Error::ejecucion("el paso del bucle 'para' no puede ser 0"));
+                    }
+                    ip += 1;
+                }
+                Op::ParaCondicion(indice) => {
+                    let datos = chunk.condiciones[indice as usize];
+                    let actual = entero_de_local(locales, datos.variable)?;
+                    let limite = entero_de_local(locales, datos.fin)?;
+                    let incremento = entero_de_local(locales, datos.paso)?;
+                    let termina = if incremento > 0 {
+                        actual > limite
+                    } else {
+                        actual < limite
+                    };
+                    if termina {
+                        ip = datos.destino as usize;
+                    } else {
+                        ip += 1;
+                    }
+                }
+                Op::ParaSiguiente(indice) => {
+                    let datos = chunk.siguientes[indice as usize];
+                    let actual = entero_de_local(locales, datos.variable)?;
+                    let incremento = entero_de_local(locales, datos.paso)?;
+                    match actual.checked_add(incremento) {
+                        Some(siguiente) => {
+                            locales[datos.variable as usize] = Some(Value::Entero(siguiente));
+                            ip = datos.inicio as usize;
+                        }
+                        None => {
+                            ip = datos.fin as usize;
+                        }
+                    }
+                }
+                Op::Retornar => {
+                    return Ok(pila_pop!());
+                }
+                Op::Lanzar => {
+                    return Err(Error::Lanzado(pila_pop!()));
+                }
+            }
+        }
+    }
+
     pub(crate) fn llamar_funcion_sincrona(
         &mut self,
         funcion: &Arc<Funcion>,
@@ -1160,6 +1718,23 @@ impl Interprete {
             return Err(Error::ejecucion(
                 "desbordamiento de pila: demasiada recursión (¿falta un caso base?)",
             ));
+        }
+
+        // Si la función se puede compilar y ninguno de sus locales dinámicos
+        // existe en el entorno de definición, la ejecuta la VM.
+        if self.usar_vm && !funcion.es_async {
+            if let Some(chunk) = self.chunk_de(funcion) {
+                let puede_usarse = chunk
+                    .dinamicos
+                    .iter()
+                    .all(|nombre| !Entorno::existe(&funcion.entorno, nombre));
+                if puede_usarse {
+                    self.profundidad += 1;
+                    let resultado = self.ejecutar_vm(funcion, &chunk, args);
+                    self.profundidad -= 1;
+                    return resultado;
+                }
+            }
         }
 
         self.profundidad += 1;
@@ -1237,6 +1812,7 @@ impl Interprete {
             cuerpo: metodo.cuerpo.clone(),
             entorno,
             es_async: metodo.es_async,
+            compilado: metodo.compilado.clone(),
         });
         self.llamar_funcion(&vinculada, args)
     }
@@ -1260,6 +1836,7 @@ impl Interprete {
                         cuerpo: metodo.cuerpo.clone(),
                         entorno,
                         es_async: metodo.es_async,
+                        compilado: metodo.compilado.clone(),
                     })));
                 }
                 Err(Error::ejecucion(format!(
@@ -2133,6 +2710,67 @@ impl Interprete {
 // ----------------------------------------------------------------------
 // Utilidades
 // ----------------------------------------------------------------------
+
+fn operando_vm<'a>(
+    locales: &'a [Option<Value>],
+    chunk: &'a Chunk,
+    operando: Operando,
+) -> Result<&'a Value, Error> {
+    match operando {
+        Operando::Local(slot) => locales
+            .get(slot as usize)
+            .and_then(|valor| valor.as_ref())
+            .ok_or_else(|| {
+                let nombre = chunk
+                    .nombres_locales
+                    .get(slot as usize)
+                    .map(String::as_str)
+                    .unwrap_or("");
+                Error::ejecucion(format!("la variable '{}' no está definida", nombre))
+            }),
+        Operando::Constante(indice) => Ok(&chunk.constantes[indice as usize]),
+    }
+}
+
+fn comparar_condicional(izquierda: &Value, derecha: &Value, operador: u8) -> Result<bool, Error> {
+    if operador <= 1 {
+        let iguales = match (izquierda, derecha) {
+            (Value::Entero(a), Value::Entero(b)) => a == b,
+            (Value::Decimal(a), Value::Decimal(b)) => a == b,
+            (Value::Texto(a), Value::Texto(b)) => a == b,
+            (Value::Logico(a), Value::Logico(b)) => a == b,
+            _ => valores_iguales(izquierda, derecha),
+        };
+        return Ok(if operador == 0 { iguales } else { !iguales });
+    }
+
+    let orden = match (izquierda, derecha) {
+        (Value::Entero(a), Value::Entero(b)) => a.cmp(b),
+        (Value::Decimal(a), Value::Decimal(b)) => {
+            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+        }
+        _ => comparar_orden(izquierda, derecha).ok_or_else(|| {
+            Error::ejecucion(format!(
+                "no se pueden comparar {} y {}",
+                izquierda.tipo_nombre(),
+                derecha.tipo_nombre()
+            ))
+        })?,
+    };
+    Ok(match operador {
+        2 => orden.is_lt(),
+        3 => orden.is_gt(),
+        4 => orden.is_le(),
+        _ => orden.is_ge(),
+    })
+}
+
+fn entero_de_local(locales: &[Option<Value>], slot: u16) -> Result<i64, Error> {
+    match locales.get(slot as usize).and_then(|valor| valor.as_ref()) {
+        Some(Value::Entero(n)) => Ok(*n),
+        _ => Err(Error::ejecucion("el bucle 'para' necesita valores enteros")),
+    }
+}
 
 pub fn buscar_metodo(clase: &Arc<Clase>, nombre: &str) -> Option<Arc<Funcion>> {
     if let Some(metodo) = clase.metodos.get(nombre) {
