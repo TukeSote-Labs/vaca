@@ -20,7 +20,7 @@ runtime externo.
   autocontenido y verificado con SHA-256.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 109 pruebas automatizadas y ejemplos ejecutables.
+- 112 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** compilador a bytecode con VM de pila para funciones, con
 > intérprete de árbol como respaldo para las construcciones que la VM aún no
@@ -785,8 +785,35 @@ variádicos.
 
 ### `tiempo`
 
-`ahora()` (segundos Unix), `millis()`, `dormir(ms)`, `fecha()` y
-`fecha_iso()` en UTC.
+`ahora()` (segundos Unix), `millis()`, `dormir(ms)`.
+
+Fechas y componentes en UTC:
+
+```vaca
+importar tiempo
+
+tiempo.fecha_iso()                    # 2026-10-20T12:00:00Z
+tiempo.fecha_iso("A-M-D")             # 2026-10-20
+tiempo.formatear("H:m:S", 1700000000) # 22:13:20
+
+tiempo.año()       # 2026
+tiempo.mes()        # 10
+tiempo.dia()        # 20
+tiempo.hora()       # 12
+tiempo.minuto()     # 0
+tiempo.segundo()    # 0
+tiempo.dia_semana() # 2 (martes)
+tiempo.dia_del_año()   # día del año
+tiempo.semana()     # semana ISO
+
+p = tiempo.partes()
+imprimir(p.año, p.mes, p.dia)
+```
+
+Códigos de `formatear`: `A`/`Y` año, `M` mes, `D` día, `H` hora,
+`m` minuto, `S` segundo, `W` día de la semana, `J` día del año, `E` epoch y
+`Z` = UTC. `\` escapa el siguiente carácter. También hay
+`minutos_totales`, `horas_totales` y `dias_totales`.
 
 ### `sistema`
 

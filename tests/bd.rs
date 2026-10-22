@@ -144,11 +144,7 @@ imprimir(db.motor())
     .expect("escribir programa");
 
     let error = vaca::ejecutar_archivo(&programa).expect_err("debe fallar sin crear");
-    assert!(
-        error.to_string().contains("no existe"),
-        "error: {}",
-        error
-    );
+    assert!(error.to_string().contains("no existe"), "error: {}", error);
     assert!(!proyecto.raiz.join("no-existe.db").exists());
 }
 
@@ -242,7 +238,9 @@ db = bd.abrir_solo_lectura("no-existe.db")
 
     let error = vaca::ejecutar_archivo(&programa).expect_err("debe fallar");
     assert!(
-        error.to_string().contains("no se creará en modo solo lectura"),
+        error
+            .to_string()
+            .contains("no se creará en modo solo lectura"),
         "error: {}",
         error
     );

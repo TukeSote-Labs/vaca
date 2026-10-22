@@ -228,13 +228,18 @@ imprimir(mate.promedio(10, 20, 30))     # 20
 
 ## `tiempo`
 
+Todas las fechas son **UTC**. Un `epoch` son segundos desde
+1970-01-01T00:00:00Z; si se omite, se usa el momento actual.
+
 ```vaca
 importar tiempo
 
-imprimir(tiempo.ahora())        # segundos Unix
-imprimir(tiempo.millis())       # milisegundos Unix
-imprimir(tiempo.fecha_iso())    # 2026-10-20T12:00:00Z
-tiempo.dormir(250)              # bloquea 250 ms
+imprimir(tiempo.ahora())                  # segundos Unix
+imprimir(tiempo.millis())                 # milisegundos Unix
+imprimir(tiempo.fecha_iso())              # 2026-10-20T12:00:00Z
+imprimir(tiempo.fecha_iso("A-M-D"))       # 2026-10-20
+imprimir(tiempo.formatear("A/M/D", 0))    # 1970/01/01
+tiempo.dormir(250)                        # bloquea 250 ms
 ```
 
 | Función | Descripción |
@@ -242,9 +247,63 @@ tiempo.dormir(250)              # bloquea 250 ms
 | `ahora()` | Segundos desde la época Unix |
 | `millis()` | Milisegundos desde la época Unix |
 | `dormir(ms)` | Bloquea el hilo actual |
-| `fecha(epoch = ahora)` | Fecha legible en UTC |
+| `fecha(epoch = ahora)` | Fecha `AAAA-MM-DD HH:MM:SS` en UTC |
 | `fecha_iso(epoch = ahora)` | Fecha ISO 8601 en UTC |
 | `iso(epoch = ahora)` | Alias de `fecha_iso` |
+| `formatear(formato, epoch = ahora)` | Aplica códigos de formato |
+| `partes(epoch = ahora)` | Diccionario con todos los componentes |
+| `año(epoch = ahora)` | Año |
+| `mes(epoch = ahora)` | Mes `1..12` |
+| `dia(epoch = ahora)` | Día del mes |
+| `hora(epoch = ahora)` | Hora `0..23` |
+| `minuto(epoch = ahora)` | Minuto `0..59` |
+| `segundo(epoch = ahora)` | Segundo `0..59` |
+| `dia_semana(epoch = ahora)` | `1` lunes … `7` domingo |
+| `dia_del_año(epoch = ahora)` | Día del año `1..366` |
+| `semana(epoch = ahora)` | Semana ISO 8601 |
+| `minutos_totales(epoch = ahora)` | Minutos completos desde 1970 |
+| `horas_totales(epoch = ahora)` | Horas completas desde 1970 |
+| `dias_totales(epoch = ahora)` | Días completos desde 1970 |
+
+`fecha` y `fecha_iso` aceptan un formato como primer argumento:
+
+```vaca
+tiempo.fecha_iso("A-M-D", 1700000000)     # 2023-11-14
+tiempo.fecha("H:m:S", 1700000000)         # 22:13:20
+tiempo.iso("A", 0)                        # 1970
+tiempo.formatear("W", 0)                  # 4 (jueves)
+```
+
+### Códigos de formato
+
+| Código | Valor |
+| :--- | :--- |
+| `A` o `Y` | Año de 4 dígitos |
+| `M` | Mes de 2 dígitos |
+| `D` | Día del mes de 2 dígitos |
+| `H` | Hora de 2 dígitos (24 h) |
+| `m` | Minuto de 2 dígitos |
+| `S` | Segundo de 2 dígitos |
+| `W` | Día de la semana (`1` lunes … `7` domingo) |
+| `J` | Día del año de 3 dígitos |
+| `E` | Epoch Unix |
+| `Z` | Texto `UTC` |
+
+`M` es mes y `m` es minuto. Los demás caracteres se copian tal cual. Usa `\`
+para escapar un código: `formatear("\\A", epoch)` devuelve `A`.
+
+### Partes
+
+```vaca
+p = tiempo.partes(1709164800)
+imprimir(p.año)        # 2024
+imprimir(p.mes)         # 2
+imprimir(p.dia)         # 29
+imprimir(p.dia_del_año)    # 60
+imprimir(p.semana)      # 9 (ISO)
+imprimir(p.dia_semana)  # 4 (jueves)
+imprimir(p.zona)        # UTC
+```
 
 > `tiempo.dormir` bloquea el hilo. Para esperar sin bloquear el hilo principal,
 > lánzalo dentro de una tarea `async`.
