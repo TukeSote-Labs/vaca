@@ -367,3 +367,21 @@ fn recursion_infinita_no_desborda_el_proceso() {
     let error = ejecutar_fuente("fn f() { retornar f() }\nf()").unwrap_err();
     assert!(error.to_string().contains("recursión"));
 }
+
+#[test]
+fn dividir_global_funciona_como_explode() {
+    let salida = ejecutar_fuente(
+        r#"
+partes = dividir("Ana,30,Madrid", ",")
+afirmar(longitud(partes) == 3, "esperaba 3 partes")
+afirmar(partes[0] == "Ana", "primera parte incorrecta")
+afirmar(partes[2] == "Madrid", "última parte incorrecta")
+afirmar(dividir("sin-separador", ",")[0] == "sin-separador", "sin separador")
+afirmar(longitud(dividir("a,b,", ",")) == 3, "debe conservar el vacío final")
+afirmar(dividir("abc", "")[1] == "b", "separador vacío")
+imprimir("ok")
+"#,
+    )
+    .unwrap();
+    assert_eq!(salida.trim(), "ok");
+}

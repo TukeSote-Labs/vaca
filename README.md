@@ -20,7 +20,7 @@ runtime externo.
   autocontenido y verificado con SHA-256.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 108 pruebas automatizadas y ejemplos ejecutables.
+- 109 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** compilador a bytecode con VM de pila para funciones, con
 > intérprete de árbol como respaldo para las construcciones que la VM aún no
@@ -462,6 +462,7 @@ decimal("3.5")     # 3.5
 texto(42)          # "42"
 logico(0)          # falso
 longitud("Vaca")   # 4
+dividir("Ana,30", ",")  # ["Ana", "30"]
 tipo(3.14)         # "Decimal"
 ```
 

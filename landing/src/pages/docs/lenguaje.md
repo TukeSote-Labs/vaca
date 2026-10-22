@@ -232,6 +232,7 @@ si no "" {
 | `texto(valor)` | Convierte a `Texto` |
 | `logico(valor)` | Aplica la verdad de Vaca |
 | `longitud(valor)` | Longitud de texto, lista o diccionario |
+| `dividir(texto, separador)` | Divide un texto y devuelve una lista |
 | `tipo(valor)` | Nombre del tipo |
 | `rango(inicio, fin, paso)` | Lista de enteros; `fin` es exclusivo |
 | `copiar(valor)` | Copia superficial de listas y diccionarios |

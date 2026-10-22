@@ -58,6 +58,7 @@ verdadero.
 | `texto(x)` | Convierte a texto |
 | `logico(x)` | Convierte a lógico |
 | `longitud(x)` | Longitud de texto, lista o diccionario |
+| `dividir(texto, separador)` | Divide un texto y devuelve una lista |
 | `tipo(x)` | Nombre del tipo |
 | `rango(inicio, fin, paso)` | Lista de enteros; `fin` exclusivo |
 | `copiar(x)` | Copia superficial |

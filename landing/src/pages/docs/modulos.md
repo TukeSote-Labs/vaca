@@ -355,6 +355,9 @@ imprimir(cadenas.rellenar_izquierda("7", 3, "0")) # 007
 | `recortar(texto)` | Quita espacios de los extremos |
 | `reemplazar(texto, viejo, nuevo)` | Reemplaza todas las apariciones |
 | `dividir(texto, separador)` | Divide en una lista |
+
+`dividir` también está disponible como función global: `dividir("a,b", ",")`.
+Con un separador vacío divide en caracteres. Conserva las partes vacías.
 | `contiene(texto, buscado)` | Lógico |
 | `empieza_con(texto, prefijo)` | Lógico |
 | `termina_con(texto, sufijo)` | Lógico |

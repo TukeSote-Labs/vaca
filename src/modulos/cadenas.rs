@@ -82,7 +82,7 @@ fn reemplazar(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     ))
 }
 
-fn dividir(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
+pub(crate) fn dividir(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     let texto = args[0].a_texto();
     let separador = args[1].a_texto();
     let partes: Vec<Value> = if separador.is_empty() {

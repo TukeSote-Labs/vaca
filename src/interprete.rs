@@ -270,6 +270,7 @@ impl Interprete {
             ("texto", 1, 1, nativa_texto),
             ("logico", 1, 1, nativa_logico),
             ("longitud", 1, 1, nativa_longitud),
+            ("dividir", 2, 2, crate::modulos::cadenas::dividir),
             ("tipo", 1, 1, nativa_tipo),
             ("afirmar", 1, 2, nativa_afirmar),
             ("rango", 1, 3, nativa_rango),
