@@ -16,7 +16,7 @@ runtime externo.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 79 pruebas automatizadas y ejemplos ejecutables.
+- 91 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** compilador a bytecode con VM de pila para funciones, con
 > intérprete de árbol como respaldo para las construcciones que la VM aún no
@@ -860,6 +860,53 @@ http.servidor("0.0.0.0", 8090, manejador, 1000)
 
 ---
 
+## Paquetes
+
+Vaca tiene módulos al estilo de Go: declaras la ruta del repositorio y una
+versión semver, y `vaca instalar` fija el commit y un hash en `vaca.lock`.
+
+```bash
+vaca init ejemplo.com/mi-api
+vaca agregar github.com/usuario/util@1.2.0
+vaca instalar
+vaca actualizar
+vaca listar
+```
+
+`vaca.paquete`:
+
+```json
+{
+  "nombre": "ejemplo.com/mi-api",
+  "version": "0.1.0",
+  "dependencias": {
+    "github.com/usuario/util": "^1.2.0"
+  },
+  "reemplazos": {},
+  "origenes": {}
+}
+```
+
+```vaca
+importar "github.com/usuario/util"
+imprimir(util.saludo("Vaca"))
+```
+
+- Las versiones son etiquetas git `vX.Y.Z` (o `X.Y.Z`).
+- Se admiten `^`, `~`, `>=`, `<`, versión exacta y `*`.
+- Se instalan dependencias transitivas y se detectan restricciones
+  incompatibles.
+- `origenes` permite apuntar a un git propio o a `file://` (pruebas).
+- `reemplazos` copia un directorio local para desarrollar un paquete.
+- El lock fija versión, commit y SHA-256 del árbol; si algo cambia, la
+  instalación falla.
+- Requiere `git`. Los paquetes ejecutan código con tus permisos: revísalos.
+
+Consulta [Paquetes](landing/src/pages/docs/paquetes.md) para la referencia
+completa.
+
+---
+
 ## Rendimiento
 
 Vaca compila cada función a bytecode y la ejecuta en una VM de pila
@@ -919,6 +966,7 @@ src/
   value.rs          Valores en tiempo de ejecución
   bytecode.rs       Instrucciones y unidades de código de la VM
   compilador.rs     AST → bytecode
+  paquetes.rs       Manifiesto, versiones, git, lockfile y vendor
   rapido.rs         Hasher FNV-1a interno
   interprete.rs     Intérprete de árbol, VM y métodos nativos
   modulos/
@@ -933,7 +981,7 @@ src/
     sistema.rs      Entorno y proceso
     concurrencia.rs Tareas, contadores atómicos e hilos
 ejemplos/           Programas de ejemplo
-tests/              Pruebas de lenguaje, VM, integración y TLS
+tests/              Pruebas de lenguaje, VM, TLS y paquetes
 scripts/            Prueba de humo de los servidores HTTP
 packaging/          Empaquetado, Docker y systemd
   empaquetar.sh     Genera el tarball distribuible

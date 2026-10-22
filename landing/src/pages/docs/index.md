@@ -111,6 +111,8 @@ Ada
 - **[HTTP y concurrencia](/docs/servidor/)**: servidor, cliente, hilos,
   límites de conexión y despliegue.
 - **[Ejemplos de uso](/docs/ejemplos/)**: programas completos con su salida.
+- **[Paquetes](/docs/paquetes/)**: manifiesto, versiones, git, lockfile y
+  reemplazos locales.
 - **[Herramientas](/docs/herramientas/)**: CLI, REPL, editor, empaquetado,
   pruebas y diagnóstico de errores.
 - **[Referencia rápida](/docs/referencia/)**: palabras clave, operadores,

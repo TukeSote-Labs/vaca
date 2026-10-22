@@ -51,6 +51,18 @@ fn main() -> ExitCode {
                 1
             }
         },
+        Some("init") => comando_init(argumentos.get(1).map(|s| s.as_str())),
+        Some("instalar") | Some("install") => comando_instalar(),
+        Some("agregar") | Some("get") => match argumentos.get(1) {
+            Some(argumento) => comando_agregar(argumento),
+            None => {
+                eprintln!("uso: vaca agregar <dominio/usuario/repo>[@version]");
+                1
+            }
+        },
+        Some("actualizar") | Some("update") => comando_actualizar(),
+        Some("listar") | Some("list") => comando_listar(),
+        Some("limpiar") | Some("clean") => comando_limpiar(),
         Some(ruta) => ejecutar(ruta, &argumentos[1..]),
     };
     ExitCode::from(codigo as u8)
@@ -68,6 +80,14 @@ fn ayuda() {
     vaca ast <archivo>         Muestra el árbol de sintaxis
     vaca --version             Muestra la versión
     vaca --ayuda               Muestra esta ayuda
+
+PAQUETES:
+    vaca init [nombre]         Crea vaca.paquete en el directorio actual
+    vaca agregar <ruta>[@v]    Añade una dependencia y la instala
+    vaca instalar              Instala las dependencias del manifiesto
+    vaca actualizar            Re-resuelve versiones ignorando el lock
+    vaca listar                Muestra dependencias y versiones fijadas
+    vaca limpiar               Borra .vaca/paquetes y vaca.lock
 
 EJEMPLO:
     vaca ejemplos/hola.vaca"
@@ -242,4 +262,142 @@ fn balanceado(texto: &str) -> bool {
         }
     }
     profundidad <= 0 && !en_texto
+}
+
+// ----------------------------------------------------------------------
+// Paquetes
+// ----------------------------------------------------------------------
+
+fn directorio_actual() -> Result<PathBuf, u8> {
+    match env::current_dir() {
+        Ok(ruta) => Ok(fs::canonicalize(&ruta).unwrap_or(ruta)),
+        Err(error) => {
+            eprintln!("error: no se pudo obtener el directorio actual: {}", error);
+            Err(1)
+        }
+    }
+}
+
+fn comando_init(nombre: Option<&str>) -> u8 {
+    let raiz = match directorio_actual() {
+        Ok(raiz) => raiz,
+        Err(codigo) => return codigo,
+    };
+    match vaca::paquetes::init(&raiz, nombre) {
+        Ok(ruta) => {
+            println!("Creado {}", ruta.display());
+            println!("Añade dependencias con: vaca agregar dominio/usuario/repo@1.0.0");
+            0
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+fn comando_instalar() -> u8 {
+    let raiz = match directorio_actual() {
+        Ok(raiz) => raiz,
+        Err(codigo) => return codigo,
+    };
+    match vaca::paquetes::instalar(&raiz, false) {
+        Ok(resultado) => {
+            if resultado.instalados.is_empty() {
+                println!("No hay dependencias que instalar.");
+            } else {
+                for (modulo, version) in &resultado.instalados {
+                    println!("{} {}", modulo, version);
+                }
+                println!("Instalados {} paquete(s).", resultado.instalados.len());
+            }
+            for modulo in &resultado.reemplazados {
+                println!("{} -> reemplazo local", modulo);
+            }
+            0
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+fn comando_agregar(argumento: &str) -> u8 {
+    let (modulo, version) = match argumento.split_once('@') {
+        Some((modulo, version)) => (modulo, Some(version)),
+        None => (argumento, None),
+    };
+    let raiz = match directorio_actual() {
+        Ok(raiz) => raiz,
+        Err(codigo) => return codigo,
+    };
+    match vaca::paquetes::agregar(&raiz, modulo, version) {
+        Ok(version) => {
+            println!("Añadido {} ^{}", modulo, version);
+            0
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+fn comando_actualizar() -> u8 {
+    let raiz = match directorio_actual() {
+        Ok(raiz) => raiz,
+        Err(codigo) => return codigo,
+    };
+    match vaca::paquetes::instalar(&raiz, true) {
+        Ok(resultado) => {
+            if resultado.instalados.is_empty() {
+                println!("No hay dependencias que actualizar.");
+            } else {
+                for (modulo, version) in &resultado.instalados {
+                    println!("{} {}", modulo, version);
+                }
+                println!("Actualizados {} paquete(s).", resultado.instalados.len());
+            }
+            0
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+fn comando_listar() -> u8 {
+    let raiz = match directorio_actual() {
+        Ok(raiz) => raiz,
+        Err(codigo) => return codigo,
+    };
+    match vaca::paquetes::listar(&raiz) {
+        Ok(texto) => {
+            print!("{}", texto);
+            0
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+fn comando_limpiar() -> u8 {
+    let raiz = match directorio_actual() {
+        Ok(raiz) => raiz,
+        Err(codigo) => return codigo,
+    };
+    match vaca::paquetes::limpiar(&raiz) {
+        Ok(()) => {
+            println!("Dependencias y lockfile eliminados.");
+            0
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
 }

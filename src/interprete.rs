@@ -2630,6 +2630,15 @@ impl Interprete {
             return Ok(());
         }
 
+        if crate::paquetes::es_ruta_paquete(modulo) {
+            let ruta = crate::paquetes::resolver_importacion(modulo, &self.ruta_base)?;
+            let valor = self.importar_archivo(&ruta.to_string_lossy())?;
+            let nombre =
+                alias.unwrap_or_else(|| modulo.rsplit('/').next().unwrap_or(modulo).to_string());
+            entorno.lock().unwrap().definir(nombre, valor);
+            return Ok(());
+        }
+
         let valor = self.importar_archivo(modulo)?;
         let nombre = alias.unwrap_or_else(|| {
             Path::new(modulo)

@@ -133,6 +133,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 name = "vaca"
 version = "0.1.0"
 dependencies = [
+ "ring",
  "rustls",
  "rustls-pemfile",
  "webpki-roots 0.26.11",

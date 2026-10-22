@@ -8,6 +8,7 @@ pub mod error;
 pub mod interprete;
 pub mod lexer;
 pub mod modulos;
+pub mod paquetes;
 pub mod parser;
 pub mod rapido;
 pub mod token;

@@ -2,3 +2,4 @@
 /dist
 **/*.rs.bk
 .vaca_cache
+/.vaca

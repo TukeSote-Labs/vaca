@@ -14,6 +14,12 @@ vaca run <archivo.vaca>    # igual, con argumentos extra
 vaca repl                  # consola interactiva
 vaca tokens <archivo>      # volcado de tokens
 vaca ast <archivo>         # volcado del AST
+vaca init [nombre]         # crea vaca.paquete
+vaca agregar <ruta>[@v]    # añade e instala una dependencia
+vaca instalar              # instala las dependencias
+vaca actualizar            # re-resuelve ignorando el lock
+vaca listar                # muestra versiones y hashes
+vaca limpiar               # borra .vaca/paquetes y vaca.lock
 vaca --version             # versión
 vaca --ayuda               # ayuda + banner cowsay
 ```
