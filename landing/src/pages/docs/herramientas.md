@@ -9,20 +9,43 @@ description: "CLI, REPL, comprobación de variables, editor de Zed, empaquetado,
 ## CLI
 
 ```bash
-vaca <archivo.vaca>        # ejecuta un programa
-vaca run <archivo.vaca>    # igual, con argumentos extra
+vaca                       # ejecuta el módulo y llama a principal()
+vaca <archivo.vaca>        # ejecuta un programa o un bundle
+vaca <directorio>          # ejecuta el módulo de ese directorio
+vaca run [archivo]         # igual, con argumentos extra
 vaca repl                  # consola interactiva
 vaca tokens <archivo>      # volcado de tokens
 vaca ast <archivo>         # volcado del AST
-vaca init [nombre]         # crea vaca.paquete
+vaca init <modulo>         # crea vaca.mod e iniciar.vaca
+vaca construir             # empaqueta en .vaca/dist/<nombre>.vaca
 vaca agregar <ruta>[@v]    # añade e instala una dependencia
 vaca instalar              # instala las dependencias
 vaca actualizar            # re-resuelve ignorando el lock
-vaca listar                # muestra versiones y hashes
+vaca listar                # muestra módulo, entrada y hashes
 vaca limpiar               # borra .vaca/paquetes y vaca.lock
 vaca --version             # versión
 vaca --ayuda               # ayuda + banner cowsay
 ```
+
+## Módulos y bundles
+
+Un módulo declara su nombre, entrada y dependencias en `vaca.mod`:
+
+```bash
+vaca init ejemplo.com/mi-api
+vaca            # ejecuta iniciar.vaca y principal()
+vaca construir  # genera .vaca/dist/mi-api.vaca
+```
+
+El bundle es un único archivo con el código, `vaca.mod`, `vaca.lock` y las
+dependencias vendorizadas. Incluye un SHA-256 al final que se verifica al
+arrancar; si cambia un byte, la ejecución falla.
+
+```bash
+vaca mi-api.vaca
+```
+
+Detalles en [Módulos y paquetes](/docs/paquetes/).
 
 La versión incluye metadatos del último commit: `0.1.0+4.0b78e95` significa
 versión semántica `0.1.0`, 4 commits y el hash corto `0b78e95`. Si el binario
@@ -263,7 +286,7 @@ No imprimas secretos ni cuerpos completos en producción. Para carga, usa
 
 - La VM cubre funciones y bucles; `intentar`/`atrapar`, cierres creados dentro de una función, funciones o clases anidadas e `importar` usan el intérprete de árbol.
 - No hay comprobación estática de tipos ni recolector de basura.
-- No hay formateador (`vaca fmt`), gestor de paquetes, LSP ni `vaca test`.
+- No hay formateador (`vaca fmt`), LSP ni `vaca test`.
 - Sin ACME: los certificados se renuevan fuera de Vaca.
 - No existe `super` para llamar al método del padre.
 - La concurrencia usa hilos del sistema, no un event loop.

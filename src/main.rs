@@ -3,10 +3,12 @@
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use vaca::lexer::Lexer;
+use vaca::paquetes::Manifiesto;
 use vaca::parser::Parser;
 use vaca::value::Value;
 use vaca::{Error, Interprete};
@@ -18,7 +20,8 @@ const TAGLINE: &str = "Vaca: Lenguaje en español para servidores";
 fn main() -> ExitCode {
     let argumentos: Vec<String> = env::args().skip(1).collect();
     let codigo = match argumentos.first().map(|s| s.as_str()) {
-        None | Some("-h") | Some("--ayuda") | Some("ayuda") => {
+        None => comando_modulo(None, &[]),
+        Some("-h") | Some("--ayuda") | Some("ayuda") => {
             ayuda();
             0
         }
@@ -44,13 +47,12 @@ fn main() -> ExitCode {
                 1
             }
         },
-        Some("run") => match argumentos.get(1) {
+        Some("run") | Some("ejecutar") => match argumentos.get(1) {
+            Some(ruta) if Path::new(ruta).is_dir() => comando_modulo(Some(ruta), &argumentos[2..]),
             Some(ruta) => ejecutar(ruta, &argumentos[2..]),
-            None => {
-                eprintln!("uso: vaca run <archivo.vaca>");
-                1
-            }
+            None => comando_modulo(None, &[]),
         },
+        Some("construir") | Some("build") => comando_construir(),
         Some("init") => comando_init(argumentos.get(1).map(|s| s.as_str())),
         Some("instalar") | Some("install") => comando_instalar(),
         Some("agregar") | Some("get") => match argumentos.get(1) {
@@ -63,6 +65,7 @@ fn main() -> ExitCode {
         Some("actualizar") | Some("update") => comando_actualizar(),
         Some("listar") | Some("list") => comando_listar(),
         Some("limpiar") | Some("clean") => comando_limpiar(),
+        Some(ruta) if Path::new(ruta).is_dir() => comando_modulo(Some(ruta), &argumentos[1..]),
         Some(ruta) => ejecutar(ruta, &argumentos[1..]),
     };
     ExitCode::from(codigo as u8)
@@ -73,24 +76,28 @@ fn ayuda() {
     println!();
     println!(
         "USO:
-    vaca <archivo.vaca>        Ejecuta un programa
-    vaca run <archivo.vaca>    Ejecuta un programa
+    vaca                       Ejecuta el módulo del directorio actual
+    vaca <archivo.vaca>        Ejecuta un programa o un bundle
+    vaca <directorio>          Ejecuta el módulo de ese directorio
+    vaca run [archivo]         Igual que arriba (sin archivo: el módulo)
     vaca repl                  Abre la consola interactiva
     vaca tokens <archivo>      Muestra los tokens del archivo
     vaca ast <archivo>         Muestra el árbol de sintaxis
     vaca --version             Muestra la versión
     vaca --ayuda               Muestra esta ayuda
 
-PAQUETES:
-    vaca init [nombre]         Crea vaca.paquete en el directorio actual
+MÓDULOS Y PAQUETES:
+    vaca init <modulo>         Crea vaca.mod e iniciar.vaca
+    vaca construir             Empaqueta el módulo en .vaca/dist/*.vaca
     vaca agregar <ruta>[@v]    Añade una dependencia y la instala
     vaca instalar              Instala las dependencias del manifiesto
     vaca actualizar            Re-resuelve versiones ignorando el lock
-    vaca listar                Muestra dependencias y versiones fijadas
+    vaca listar                Muestra módulo, entrada y dependencias
     vaca limpiar               Borra .vaca/paquetes y vaca.lock
 
 EJEMPLO:
-    vaca ejemplos/hola.vaca"
+    vaca init ejemplo.com/mi-api
+    vaca"
     );
 }
 
@@ -117,6 +124,67 @@ fn banner() -> String {
 }
 
 fn ejecutar(ruta: &str, extra: &[String]) -> u8 {
+    let ruta_path = PathBuf::from(ruta);
+    if vaca::bundle::es_bundle(&ruta_path) {
+        return ejecutar_bundle(&ruta_path, extra);
+    }
+    ejecutar_ruta(ruta, extra, true)
+}
+
+/// Ejecuta el módulo del directorio actual (o del directorio indicado).
+fn comando_modulo(ruta: Option<&str>, extra: &[String]) -> u8 {
+    let directorio = match ruta {
+        Some(ruta) => match fs::canonicalize(ruta) {
+            Ok(directorio) => directorio,
+            Err(error) => {
+                eprintln!("error: no se pudo abrir '{}': {}", ruta, error);
+                return 1;
+            }
+        },
+        None => match directorio_actual() {
+            Ok(directorio) => directorio,
+            Err(codigo) => return codigo,
+        },
+    };
+
+    let Some(raiz) = vaca::paquetes::raiz_proyecto(&directorio) else {
+        if ruta.is_none() {
+            ayuda();
+            eprintln!(
+                "\nerror: este directorio no es un módulo Vaca; ejecuta `vaca init <modulo>`"
+            );
+        } else {
+            eprintln!(
+                "error: '{}' no pertenece a un módulo Vaca (falta vaca.mod)",
+                directorio.display()
+            );
+        }
+        return 1;
+    };
+    let Some(ruta_manifiesto) = Manifiesto::ruta_en(&raiz) else {
+        eprintln!("error: no se encontró vaca.mod en '{}'", raiz.display());
+        return 1;
+    };
+    let manifiesto = match Manifiesto::leer(&ruta_manifiesto) {
+        Ok(manifiesto) => manifiesto,
+        Err(error) => {
+            eprintln!("{}", error);
+            return 1;
+        }
+    };
+    let entrada = raiz.join(manifiesto.entrada());
+    if !entrada.is_file() {
+        eprintln!(
+            "error: no existe la entrada '{}' declarada en '{}'\n       crea el archivo o cambia la línea 'inicio' del módulo",
+            entrada.display(),
+            ruta_manifiesto.display()
+        );
+        return 1;
+    }
+    ejecutar_ruta(&entrada.to_string_lossy(), extra, true)
+}
+
+fn ejecutar_ruta(ruta: &str, extra: &[String], llamar_principal: bool) -> u8 {
     let fuente = match fs::read_to_string(ruta) {
         Ok(f) => f,
         Err(e) => {
@@ -135,13 +203,68 @@ fn ejecutar(ruta: &str, extra: &[String]) -> u8 {
         }
     }
     match interprete.ejecutar_fuente(&fuente) {
-        Ok(()) => interprete.codigo_salida.unwrap_or(0) as u8,
+        Ok(()) => terminar(&mut interprete, llamar_principal),
         Err(Error::Salir(codigo)) => codigo as u8,
         Err(error) => {
             eprintln!("{}", error);
             1
         }
     }
+}
+
+fn ejecutar_bundle(ruta: &Path, extra: &[String]) -> u8 {
+    let bundle = match vaca::bundle::leer(ruta) {
+        Ok(bundle) => Arc::new(bundle),
+        Err(error) => {
+            eprintln!("{}", error);
+            return 1;
+        }
+    };
+    let inicio = bundle.inicio.clone();
+    let fuente = match bundle.texto(&inicio) {
+        Some(fuente) => fuente.to_string(),
+        None => {
+            eprintln!("error: el bundle no contiene '{}'", inicio);
+            return 1;
+        }
+    };
+
+    let mut interprete = Interprete::nuevo();
+    interprete.max_profundidad = 256;
+    interprete.argumentos = extra.to_vec();
+    interprete.ruta_base = Path::new(&inicio)
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_default();
+    interprete.bundle = Some(Arc::clone(&bundle));
+
+    match interprete.ejecutar_fuente(&fuente) {
+        Ok(()) => terminar(&mut interprete, true),
+        Err(Error::Salir(codigo)) => codigo as u8,
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+/// Tras ejecutar la entrada del módulo, llama a `principal()` si existe.
+fn terminar(interprete: &mut Interprete, llamar_principal: bool) -> u8 {
+    if llamar_principal {
+        let valor = vaca::interprete::Entorno::obtener(&interprete.global, "principal");
+        if let Some(valor @ (Value::Funcion(_) | Value::Nativa(_))) = valor {
+            if let Err(error) = interprete.llamar(valor, Vec::new()) {
+                return match error {
+                    Error::Salir(codigo) => codigo as u8,
+                    error => {
+                        eprintln!("{}", error);
+                        1
+                    }
+                };
+            }
+        }
+    }
+    interprete.codigo_salida.unwrap_or(0) as u8
 }
 
 fn mostrar_tokens(ruta: &str) -> u8 {
@@ -279,14 +402,71 @@ fn directorio_actual() -> Result<PathBuf, u8> {
 }
 
 fn comando_init(nombre: Option<&str>) -> u8 {
+    let Some(nombre) = nombre else {
+        eprintln!("error: falta el nombre del módulo");
+        eprintln!("uso: vaca init <modulo>");
+        eprintln!("ejemplo: vaca init ejemplo.com/mi-api");
+        return 1;
+    };
     let raiz = match directorio_actual() {
         Ok(raiz) => raiz,
         Err(codigo) => return codigo,
     };
     match vaca::paquetes::init(&raiz, nombre) {
-        Ok(ruta) => {
-            println!("Creado {}", ruta.display());
+        Ok(modulo) => {
+            let manifiesto = modulo
+                .manifiesto
+                .strip_prefix(&raiz)
+                .unwrap_or(&modulo.manifiesto);
+            let entrada = modulo
+                .entrada
+                .strip_prefix(&raiz)
+                .unwrap_or(&modulo.entrada);
+            println!("Módulo {} creado", modulo.nombre);
+            println!("  {}", manifiesto.display());
+            println!("  {}", entrada.display());
+            println!();
+            println!("Ejecuta `vaca` para iniciarlo.");
             println!("Añade dependencias con: vaca agregar dominio/usuario/repo@1.0.0");
+            0
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+fn comando_construir() -> u8 {
+    let raiz = match directorio_actual() {
+        Ok(raiz) => raiz,
+        Err(codigo) => return codigo,
+    };
+    match vaca::bundle::construir(&raiz) {
+        Ok(artefacto) => {
+            let ruta = artefacto
+                .ruta
+                .strip_prefix(&raiz)
+                .unwrap_or(&artefacto.ruta);
+            println!(
+                "Empaquetado {} ({:.1} KiB)",
+                ruta.display(),
+                artefacto.bytes as f64 / 1024.0
+            );
+            println!("  módulo:  {}", artefacto.modulo);
+            println!("  entrada: {}", artefacto.inicio);
+            println!(
+                "  sha256:  {}",
+                artefacto.hash.trim_start_matches("sha256:")
+            );
+            println!(
+                "  copia este archivo al servidor y ejecuta: vaca {}",
+                artefacto
+                    .ruta
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "programa.vaca".to_string())
+            );
             0
         }
         Err(error) => {

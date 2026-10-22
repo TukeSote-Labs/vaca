@@ -1,13 +1,15 @@
-//! Sistema de paquetes al estilo de Go.
+//! Sistema de módulos y paquetes al estilo de Go.
 //!
-//! Un proyecto declara sus dependencias en `vaca.paquete` (JSON). Cada
-//! dependencia es una ruta de módulo (`ejemplo.com/usuario/lib`) y una
-//! restricción de versión semver. `vaca instalar` descarga las etiquetas
-//! (`tags`) del repositorio git, elige la mejor versión, copia el código a
-//! `.vaca/paquetes/` y fija versión, commit y hash en `vaca.lock`.
+//! Un proyecto declara su nombre, su archivo de entrada y sus dependencias en
+//! `vaca.mod` (texto, como `go.mod`). Cada dependencia es una ruta de módulo
+//! (`ejemplo.com/usuario/lib`) y una restricción de versión semver.
+//! `vaca instalar` descarga las etiquetas (`tags`) del repositorio git, elige
+//! la mejor versión, copia el código a `.vaca/paquetes/` y fija versión, commit
+//! y hash en `vaca.lock`.
 //!
 //! El código importado se resuelve en tiempo de ejecución desde ese
-//! directorio, así que un proyecto instalado funciona sin red.
+//! directorio, así que un proyecto instalado funciona sin red. También se
+//! admiten importaciones del propio módulo (`importar "ejemplo.com/app/util"`).
 
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
@@ -16,12 +18,15 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use crate::error::Error;
-use crate::modulos::json;
 use crate::value::Value;
 
-pub const MANIFIESTO: &str = "vaca.paquete";
+pub const MANIFIESTO: &str = "vaca.mod";
+/// Formato anterior en JSON. Se sigue leyendo para no romper proyectos.
+pub const MANIFIESTO_LEGADO: &str = "vaca.paquete";
 pub const BLOQUEO: &str = "vaca.lock";
 pub const DIR_VENDOR: &str = ".vaca/paquetes";
+/// Archivo que se ejecuta al lanzar el módulo sin argumentos.
+pub const ENTRADA_POR_DEFECTO: &str = "iniciar.vaca";
 /// Archivos que puede exponer un paquete, en orden de preferencia.
 const ENTRADAS: [&str; 3] = ["paquete.vaca", "index.vaca", "modulo.vaca"];
 
@@ -134,17 +139,138 @@ impl Restriccion {
 pub struct Manifiesto {
     pub nombre: String,
     pub version: String,
+    pub inicio: String,
     pub dependencias: BTreeMap<String, String>,
     pub reemplazos: BTreeMap<String, String>,
     pub origenes: BTreeMap<String, String>,
 }
 
 impl Manifiesto {
+    /// Busca `vaca.mod` y, si no existe, el antiguo `vaca.paquete`.
+    pub fn ruta_en(raiz: &Path) -> Option<PathBuf> {
+        for nombre in [MANIFIESTO, MANIFIESTO_LEGADO] {
+            let ruta = raiz.join(nombre);
+            if ruta.is_file() {
+                return Some(ruta);
+            }
+        }
+        None
+    }
+
+    /// Archivo de entrada del módulo (`iniciar.vaca` si no se declara otro).
+    pub fn entrada(&self) -> String {
+        if self.inicio.is_empty() {
+            ENTRADA_POR_DEFECTO.to_string()
+        } else {
+            self.inicio.clone()
+        }
+    }
+
     pub fn leer(ruta: &Path) -> Result<Manifiesto, Error> {
         let texto = fs::read_to_string(ruta).map_err(|e| {
             Error::ejecucion(format!("no se pudo leer '{}': {}", ruta.display(), e))
         })?;
-        let valor = json::parse(&texto)
+        let origen = ruta.display().to_string();
+        if texto.trim_start().starts_with('{') {
+            Manifiesto::leer_json(&texto, ruta)
+        } else {
+            Manifiesto::leer_texto(&texto, &origen)
+        }
+    }
+
+    /// Interpreta el contenido de un `vaca.mod` (o del JSON antiguo).
+    pub fn desde_texto(texto: &str) -> Result<Manifiesto, Error> {
+        if texto.trim_start().starts_with('{') {
+            Manifiesto::leer_json(texto, Path::new(MANIFIESTO))
+        } else {
+            Manifiesto::leer_texto(texto, MANIFIESTO)
+        }
+    }
+
+    fn leer_texto(texto: &str, origen: &str) -> Result<Manifiesto, Error> {
+        let mut manifiesto = Manifiesto::default();
+        for (indice, linea) in texto.lines().enumerate() {
+            let numero = indice + 1;
+            let linea = linea.trim();
+            if linea.is_empty() || linea.starts_with('#') || linea.starts_with("//") {
+                continue;
+            }
+            let (clave, resto) = match linea.split_once(char::is_whitespace) {
+                Some((clave, resto)) => (clave, resto.trim()),
+                None => (linea, ""),
+            };
+            let error = |detalle: String| {
+                Error::ejecucion(format!("'{}': línea {}: {}", origen, numero, detalle))
+            };
+            match clave {
+                "modulo" | "módulo" | "nombre" => manifiesto.nombre = resto.to_string(),
+                "version" | "versión" => manifiesto.version = resto.to_string(),
+                "inicio" | "entrada" => manifiesto.inicio = resto.to_string(),
+                "requiere" => {
+                    let mut partes = resto.split_whitespace();
+                    let (Some(modulo), Some(version), None) =
+                        (partes.next(), partes.next(), partes.next())
+                    else {
+                        return Err(error(
+                            "'requiere' necesita una ruta y una versión: requiere dominio/usuario/repo ^1.2.0"
+                                .to_string(),
+                        ));
+                    };
+                    validar_modulo(modulo).map_err(|e| error(e.to_string()))?;
+                    Restriccion::parse(version).ok_or_else(|| {
+                        error(format!("versión inválida '{}' para '{}'", version, modulo))
+                    })?;
+                    manifiesto
+                        .dependencias
+                        .insert(modulo.to_string(), version.to_string());
+                }
+                "reemplaza" => {
+                    let mut partes = resto.split_whitespace();
+                    let (Some(modulo), Some(destino), None) =
+                        (partes.next(), partes.next(), partes.next())
+                    else {
+                        return Err(error(
+                            "'reemplaza' necesita una ruta de módulo y un directorio"
+                                .to_string(),
+                        ));
+                    };
+                    validar_modulo(modulo).map_err(|e| error(e.to_string()))?;
+                    manifiesto
+                        .reemplazos
+                        .insert(modulo.to_string(), destino.to_string());
+                }
+                "origen" => {
+                    let mut partes = resto.split_whitespace();
+                    let (Some(modulo), Some(url), None) =
+                        (partes.next(), partes.next(), partes.next())
+                    else {
+                        return Err(error(
+                            "'origen' necesita una ruta de módulo y una URL".to_string(),
+                        ));
+                    };
+                    validar_modulo(modulo).map_err(|e| error(e.to_string()))?;
+                    validar_origen(url).map_err(|e| error(e.to_string()))?;
+                    manifiesto
+                        .origenes
+                        .insert(modulo.to_string(), url.to_string());
+                }
+                otra => {
+                    return Err(error(format!(
+                        "directiva desconocida '{}'; usa modulo, version, inicio, requiere, reemplaza u origen",
+                        otra
+                    )))
+                }
+            }
+        }
+        if !manifiesto.nombre.is_empty() {
+            validar_nombre_modulo(&manifiesto.nombre)
+                .map_err(|e| Error::ejecucion(format!("'{}': {}", origen, e)))?;
+        }
+        Ok(manifiesto)
+    }
+
+    fn leer_json(texto: &str, ruta: &Path) -> Result<Manifiesto, Error> {
+        let valor = crate::modulos::json::parse(texto)
             .map_err(|e| Error::ejecucion(format!("'{}': {}", ruta.display(), e)))?;
         let mapa = match valor {
             Value::Diccionario(mapa) => mapa,
@@ -164,6 +290,9 @@ impl Manifiesto {
         if let Some(valor) = mapa.get("version") {
             manifiesto.version = valor.a_texto();
         }
+        if let Some(valor) = mapa.get("inicio") {
+            manifiesto.inicio = valor.a_texto();
+        }
         manifiesto.dependencias = leer_mapa(&mapa, "dependencias")?;
         manifiesto.reemplazos = leer_mapa(&mapa, "reemplazos")?;
         manifiesto.origenes = leer_mapa(&mapa, "origenes")?;
@@ -178,26 +307,40 @@ impl Manifiesto {
     }
 
     pub fn escribir(&self, ruta: &Path) -> Result<(), Error> {
-        let mut texto = String::from("{\n");
-        texto.push_str(&format!("  \"nombre\": {},\n", comillas(&self.nombre)));
+        let nombre = if self.nombre.is_empty() {
+            "proyecto"
+        } else {
+            self.nombre.as_str()
+        };
+        let mut texto = String::from("# Módulo de Vaca\n");
+        texto.push_str(&format!("modulo {}\n", nombre));
         texto.push_str(&format!(
-            "  \"version\": {},\n",
-            comillas(if self.version.is_empty() {
+            "version {}\n",
+            if self.version.is_empty() {
                 "0.1.0"
             } else {
                 &self.version
-            })
+            }
         ));
-        texto.push_str(&format!(
-            "  \"dependencias\": {},\n",
-            mapa_json(&self.dependencias)
-        ));
-        texto.push_str(&format!(
-            "  \"reemplazos\": {},\n",
-            mapa_json(&self.reemplazos)
-        ));
-        texto.push_str(&format!("  \"origenes\": {}\n", mapa_json(&self.origenes)));
-        texto.push_str("}\n");
+        texto.push_str(&format!("inicio {}\n", self.entrada()));
+        if !self.dependencias.is_empty() {
+            texto.push('\n');
+            for (modulo, restriccion) in &self.dependencias {
+                texto.push_str(&format!("requiere {} {}\n", modulo, restriccion));
+            }
+        }
+        if !self.reemplazos.is_empty() {
+            texto.push('\n');
+            for (modulo, destino) in &self.reemplazos {
+                texto.push_str(&format!("reemplaza {} {}\n", modulo, destino));
+            }
+        }
+        if !self.origenes.is_empty() {
+            texto.push('\n');
+            for (modulo, url) in &self.origenes {
+                texto.push_str(&format!("origen {} {}\n", modulo, url));
+            }
+        }
         fs::write(ruta, texto).map_err(|e| {
             Error::ejecucion(format!("no se pudo escribir '{}': {}", ruta.display(), e))
         })
@@ -233,7 +376,7 @@ impl Bloqueo {
         let texto = fs::read_to_string(ruta).map_err(|e| {
             Error::ejecucion(format!("no se pudo leer '{}': {}", ruta.display(), e))
         })?;
-        let valor = json::parse(&texto)
+        let valor = crate::modulos::json::parse(&texto)
             .map_err(|e| Error::ejecucion(format!("'{}': {}", ruta.display(), e)))?;
         let mapa = match valor {
             Value::Diccionario(mapa) => mapa.lock().unwrap().clone(),
@@ -304,7 +447,7 @@ pub fn raiz_proyecto(desde: &Path) -> Option<PathBuf> {
             return Some(dir.to_path_buf());
         }
         let dentro_de_vendor = dir.components().any(|c| c.as_os_str() == ".vaca");
-        if !dentro_de_vendor && dir.join(MANIFIESTO).is_file() && con_manifiesto.is_none() {
+        if !dentro_de_vendor && Manifiesto::ruta_en(dir).is_some() && con_manifiesto.is_none() {
             con_manifiesto = Some(dir.to_path_buf());
         }
         actual = dir.parent();
@@ -387,30 +530,156 @@ pub fn validar_modulo(modulo: &str) -> Result<(), Error> {
 
 /// Busca el archivo de entrada de un paquete instalado.
 pub fn resolver_importacion(modulo: &str, ruta_base: &Path) -> Result<PathBuf, Error> {
-    validar_modulo(modulo)?;
     let raiz = raiz_proyecto(ruta_base).ok_or_else(|| {
         Error::ejecucion(format!(
-            "el paquete '{}' necesita un proyecto con '{}' y ejecutar `vaca instalar`",
+            "el paquete '{}' necesita un módulo con '{}' y ejecutar `vaca instalar`",
             modulo, MANIFIESTO
         ))
     })?;
+
+    if let Some(ruta) = resolver_modulo_propio(&raiz, modulo)? {
+        return Ok(ruta);
+    }
+
+    validar_modulo(modulo)?;
     let dir = dir_paquete(&raiz, modulo);
-    let candidatos: Vec<PathBuf> = ENTRADAS
-        .iter()
-        .map(|entrada| dir.join(entrada))
-        .chain(std::iter::once(dir.with_extension("vaca")))
-        .collect();
-    for candidato in &candidatos {
-        if candidato.is_file() {
-            return Ok(candidato.clone());
+    buscar_entrada(&dir).ok_or_else(|| {
+        Error::ejecucion(format!(
+            "el paquete '{}' no está instalado o no tiene un archivo de entrada ({}); ejecuta `vaca instalar` en '{}'",
+            modulo,
+            ENTRADAS.join(", "),
+            raiz.display()
+        ))
+    })
+}
+
+/// Resuelve una importación que pertenece al propio módulo.
+///
+/// `importar "ejemplo.com/app/util"` busca `util.vaca` o `util/paquete.vaca`
+/// dentro de la raíz del módulo. Devuelve `None` si la ruta no empieza por el
+/// nombre del módulo.
+pub fn resolver_modulo_propio(raiz: &Path, modulo: &str) -> Result<Option<PathBuf>, Error> {
+    let Some(ruta_manifiesto) = Manifiesto::ruta_en(raiz) else {
+        return Ok(None);
+    };
+    let manifiesto = Manifiesto::leer(&ruta_manifiesto)?;
+    if manifiesto.nombre.is_empty() {
+        return Ok(None);
+    }
+    let Some(resto) = modulo.strip_prefix(manifiesto.nombre.as_str()) else {
+        return Ok(None);
+    };
+    if resto.is_empty() {
+        return Err(Error::ejecucion(format!(
+            "no se puede importar el módulo completo '{}'; importa un archivo o un subpaquete",
+            modulo
+        )));
+    }
+    let Some(resto) = resto.strip_prefix('/') else {
+        return Ok(None);
+    };
+    if resto.is_empty() {
+        return Err(Error::ejecucion(format!(
+            "importación inválida '{}': falta la ruta dentro del módulo",
+            modulo
+        )));
+    }
+    validar_ruta_relativa(resto)?;
+
+    let base: PathBuf = resto
+        .split('/')
+        .fold(raiz.to_path_buf(), |ruta, parte| ruta.join(parte));
+    buscar_entrada_propia(&base).map(Some).ok_or_else(|| {
+        Error::ejecucion(format!(
+            "el módulo '{}' no contiene '{}' (se buscó {}.vaca y {}/paquete.vaca)",
+            manifiesto.nombre, resto, resto, resto
+        ))
+    })
+}
+
+fn validar_ruta_relativa(ruta: &str) -> Result<(), Error> {
+    if ruta.is_empty() || ruta.len() > 200 {
+        return Err(Error::ejecucion(format!(
+            "ruta de módulo inválida '{}'",
+            ruta
+        )));
+    }
+    for segmento in ruta.split('/') {
+        if segmento.is_empty() || segmento == "." || segmento == ".." {
+            return Err(Error::ejecucion(format!(
+                "ruta de módulo inválida '{}': no se permite '..'",
+                ruta
+            )));
+        }
+        if !segmento
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        {
+            return Err(Error::ejecucion(format!(
+                "ruta de módulo inválida '{}'",
+                ruta
+            )));
         }
     }
-    Err(Error::ejecucion(format!(
-        "el paquete '{}' no está instalado o no tiene un archivo de entrada ({}); ejecuta `vaca instalar` en '{}'",
-        modulo,
-        ENTRADAS.join(", "),
-        raiz.display()
-    )))
+    Ok(())
+}
+
+/// Nombre de módulo: admite rutas con o sin dominio (`app`, `ejemplo.com/app`).
+pub fn validar_nombre_modulo(nombre: &str) -> Result<(), Error> {
+    if nombre.is_empty() || nombre.len() > 200 {
+        return Err(Error::ejecucion(
+            "el nombre del módulo no puede estar vacío".to_string(),
+        ));
+    }
+    validar_ruta_relativa(nombre)
+}
+
+fn buscar_entrada(base: &Path) -> Option<PathBuf> {
+    for entrada in ENTRADAS {
+        let candidato = base.join(entrada);
+        if candidato.is_file() {
+            return Some(candidato);
+        }
+    }
+    let candidato = base.with_extension("vaca");
+    if candidato.is_file() {
+        Some(candidato)
+    } else {
+        None
+    }
+}
+
+/// Para subpaquetes propios se prefiere el archivo suelto (`util.vaca`)
+/// antes que un directorio (`util/paquete.vaca`).
+fn buscar_entrada_propia(base: &Path) -> Option<PathBuf> {
+    if base
+        .extension()
+        .is_some_and(|extension| extension == "vaca")
+        && base.is_file()
+    {
+        return Some(base.to_path_buf());
+    }
+    let archivo = base.with_extension("vaca");
+    if archivo.is_file() {
+        return Some(archivo);
+    }
+    for entrada in ENTRADAS {
+        let candidato = base.join(entrada);
+        if candidato.is_file() {
+            return Some(candidato);
+        }
+    }
+    None
+}
+
+/// Último segmento de la ruta, útil para nombres de artefactos.
+pub fn nombre_corto(modulo: &str) -> String {
+    modulo
+        .rsplit('/')
+        .next()
+        .filter(|nombre| !nombre.is_empty())
+        .unwrap_or("programa")
+        .to_string()
 }
 
 // ----------------------------------------------------------------------
@@ -430,7 +699,13 @@ struct Resuelto {
 }
 
 pub fn instalar(raiz: &Path, actualizar: bool) -> Result<Resultado, Error> {
-    let ruta_manifiesto = raiz.join(MANIFIESTO);
+    let ruta_manifiesto = Manifiesto::ruta_en(raiz).ok_or_else(|| {
+        Error::ejecucion(format!(
+            "no hay '{}' en '{}'; ejecuta `vaca init <modulo>` primero",
+            MANIFIESTO,
+            raiz.display()
+        ))
+    })?;
     let manifiesto = Manifiesto::leer(&ruta_manifiesto)?;
     let ruta_bloqueo = raiz.join(BLOQUEO);
     let bloqueo_anterior = if actualizar {
@@ -568,8 +843,7 @@ pub fn instalar(raiz: &Path, actualizar: bool) -> Result<Resultado, Error> {
             }
 
             // Dependencias transitivas del paquete recién instalado.
-            let manifiesto_paquete = destino.join(MANIFIESTO);
-            if manifiesto_paquete.is_file() {
+            if let Some(manifiesto_paquete) = Manifiesto::ruta_en(&destino) {
                 let dependiente = Manifiesto::leer(&manifiesto_paquete)?;
                 for (dependencia, restriccion) in dependiente.dependencias {
                     let restriccion = Restriccion::parse(&restriccion).ok_or_else(|| {
@@ -663,16 +937,14 @@ pub fn instalar(raiz: &Path, actualizar: bool) -> Result<Resultado, Error> {
 
 pub fn agregar(raiz: &Path, modulo: &str, version: Option<&str>) -> Result<String, Error> {
     validar_modulo(modulo)?;
-    let ruta_manifiesto = raiz.join(MANIFIESTO);
-    let mut manifiesto = if ruta_manifiesto.is_file() {
-        Manifiesto::leer(&ruta_manifiesto)?
-    } else {
-        return Err(Error::ejecucion(format!(
-            "no hay '{}' en '{}'; ejecuta `vaca init` primero",
+    let ruta_manifiesto = Manifiesto::ruta_en(raiz).ok_or_else(|| {
+        Error::ejecucion(format!(
+            "no hay '{}' en '{}'; ejecuta `vaca init <modulo>` primero",
             MANIFIESTO,
             raiz.display()
-        )));
-    };
+        ))
+    })?;
+    let mut manifiesto = Manifiesto::leer(&ruta_manifiesto)?;
 
     let version = match version {
         Some(v) => Version::parse(v)
@@ -695,18 +967,31 @@ pub fn agregar(raiz: &Path, modulo: &str, version: Option<&str>) -> Result<Strin
     manifiesto
         .dependencias
         .insert(modulo.to_string(), format!("^{}", version));
-    manifiesto.escribir(&ruta_manifiesto)?;
+    // Si el proyecto venía del formato JSON antiguo, se migra a `vaca.mod`.
+    let ruta_salida = if ruta_manifiesto
+        .extension()
+        .is_some_and(|extension| extension == "paquete")
+    {
+        raiz.join(MANIFIESTO)
+    } else {
+        ruta_manifiesto
+    };
+    manifiesto.escribir(&ruta_salida)?;
     instalar(raiz, false)?;
     Ok(version.to_string())
 }
 
 pub fn listar(raiz: &Path) -> Result<String, Error> {
-    let manifiesto = Manifiesto::leer(&raiz.join(MANIFIESTO))?;
+    let ruta_manifiesto = Manifiesto::ruta_en(raiz).ok_or_else(|| {
+        Error::ejecucion(format!("no hay '{}' en '{}'", MANIFIESTO, raiz.display()))
+    })?;
+    let manifiesto = Manifiesto::leer(&ruta_manifiesto)?;
     let bloqueo = Bloqueo::leer(&raiz.join(BLOQUEO))?;
     let mut texto = String::new();
     if !manifiesto.nombre.is_empty() {
-        texto.push_str(&format!("proyecto: {}\n", manifiesto.nombre));
+        texto.push_str(&format!("módulo:   {}\n", manifiesto.nombre));
     }
+    texto.push_str(&format!("entrada:  {}\n", manifiesto.entrada()));
     if manifiesto.dependencias.is_empty() {
         texto.push_str("sin dependencias\n");
         return Ok(texto);
@@ -736,26 +1021,49 @@ pub fn limpiar(raiz: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn init(raiz: &Path, nombre: Option<&str>) -> Result<PathBuf, Error> {
-    let ruta = raiz.join(MANIFIESTO);
-    if ruta.exists() {
-        return Err(Error::ejecucion(format!("'{}' ya existe", ruta.display())));
+pub struct ModuloCreado {
+    pub nombre: String,
+    pub manifiesto: PathBuf,
+    pub entrada: PathBuf,
+}
+
+pub fn init(raiz: &Path, nombre: &str) -> Result<ModuloCreado, Error> {
+    let nombre = nombre.trim().trim_end_matches('/');
+    validar_nombre_modulo(nombre)?;
+    if let Some(ruta) = Manifiesto::ruta_en(raiz) {
+        return Err(Error::ejecucion(format!(
+            "'{}' ya existe; no se sobrescribe",
+            ruta.display()
+        )));
     }
-    let nombre = nombre
-        .map(|n| n.to_string())
-        .or_else(|| {
-            raiz.file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n.to_string())
-        })
-        .unwrap_or_else(|| "proyecto".to_string());
     let manifiesto = Manifiesto {
-        nombre,
+        nombre: nombre.to_string(),
         version: "0.1.0".to_string(),
+        inicio: ENTRADA_POR_DEFECTO.to_string(),
         ..Manifiesto::default()
     };
+    let ruta = raiz.join(MANIFIESTO);
     manifiesto.escribir(&ruta)?;
-    Ok(ruta)
+
+    let entrada = raiz.join(ENTRADA_POR_DEFECTO);
+    if !entrada.exists() {
+        let plantilla = format!(
+            "# Punto de entrada del módulo {nombre}.\n# Ejecuta `vaca` en este directorio para iniciarlo.\n\nfn principal() {{\n    imprimir(\"Hola desde {nombre}\")\n}}\n"
+        );
+        fs::write(&entrada, plantilla).map_err(|e| {
+            Error::ejecucion(format!(
+                "no se pudo escribir '{}': {}",
+                entrada.display(),
+                e
+            ))
+        })?;
+    }
+
+    Ok(ModuloCreado {
+        nombre: nombre.to_string(),
+        manifiesto: ruta,
+        entrada,
+    })
 }
 
 // ----------------------------------------------------------------------
@@ -988,6 +1296,19 @@ fn hex(bytes: &[u8]) -> String {
     texto
 }
 
+/// SHA-256 de un bloque de bytes.
+pub fn sha256_bytes(datos: &[u8]) -> [u8; 32] {
+    let digesto = ring::digest::digest(&ring::digest::SHA256, datos);
+    let mut salida = [0u8; 32];
+    salida.copy_from_slice(digesto.as_ref());
+    salida
+}
+
+/// SHA-256 en hexadecimal, para artefactos y mensajes.
+pub fn sha256_hex(datos: &[u8]) -> String {
+    hex(&sha256_bytes(datos))
+}
+
 // ----------------------------------------------------------------------
 // JSON mínimo
 // ----------------------------------------------------------------------
@@ -1012,23 +1333,6 @@ fn leer_mapa(
         }
     }
     Ok(resultado)
-}
-
-fn mapa_json(mapa: &BTreeMap<String, String>) -> String {
-    if mapa.is_empty() {
-        return "{}".to_string();
-    }
-    let mut texto = String::from("{");
-    let mut primero = true;
-    for (clave, valor) in mapa {
-        if !primero {
-            texto.push(',');
-        }
-        primero = false;
-        texto.push_str(&format!("\n    {}: {}", comillas(clave), comillas(valor)));
-    }
-    texto.push_str("\n  }");
-    texto
 }
 
 fn comillas(texto: &str) -> String {

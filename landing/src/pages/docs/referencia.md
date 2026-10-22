@@ -181,7 +181,7 @@ http.servidor(8080, fn(peticion) {
 - **Concurrencia con hilos**: 8 MiB de pila por tarea/conexión, sin event loop.
 - **Sin canales** entre tareas.
 - **No esperes una tarea desde dentro de sí misma**: se bloquea.
-- **Sin formateador, gestor de paquetes, LSP ni `vaca test`**.
+- **Sin formateador, LSP ni `vaca test`**.
 - **Rutas de módulos**: las funciones importadas resuelven rutas contra el
   archivo principal después del import.
 - **Errores de ejecución sin línea**: solo léxicos y sintácticos indican

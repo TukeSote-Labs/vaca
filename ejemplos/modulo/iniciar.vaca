@@ -1,0 +1,5 @@
+importar "ejemplo.com/modulo/util"
+
+fn principal() {
+    imprimir(util.saludo("Vaca"))
+}

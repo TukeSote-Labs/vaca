@@ -147,6 +147,8 @@ pub struct Interprete {
     profundidad: usize,
     pub salida: Arc<Mutex<Salida>>,
     pub ruta_base: PathBuf,
+    /// Si se ejecuta un bundle, las importaciones se leen de aquí.
+    pub bundle: Option<Arc<crate::bundle::Bundle>>,
     pub argumentos: Vec<String>,
     pub codigo_salida: Option<i32>,
     modulos_archivo: HashMap<PathBuf, Value>,
@@ -191,6 +193,7 @@ impl Interprete {
                 buffer: String::new(),
             })),
             ruta_base: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            bundle: None,
             argumentos: Vec::new(),
             codigo_salida: None,
             modulos_archivo: HashMap::new(),
@@ -220,6 +223,7 @@ impl Interprete {
             profundidad: 0,
             salida: Arc::clone(&self.salida),
             ruta_base: self.ruta_base.clone(),
+            bundle: self.bundle.clone(),
             argumentos: self.argumentos.clone(),
             codigo_salida: None,
             modulos_archivo: HashMap::new(),
@@ -2630,6 +2634,20 @@ impl Interprete {
             return Ok(());
         }
 
+        if let Some(bundle) = self.bundle.clone() {
+            return self.importar_en_bundle(&bundle, modulo, alias, entorno);
+        }
+
+        // Subpaquetes del propio módulo: `importar "ejemplo.com/app/util"`.
+        if let Some(raiz) = crate::paquetes::raiz_proyecto(&self.ruta_base) {
+            if let Some(ruta) = crate::paquetes::resolver_modulo_propio(&raiz, modulo)? {
+                let valor = self.importar_archivo(&ruta.to_string_lossy())?;
+                let nombre = alias.unwrap_or_else(|| modulo_nombre(modulo));
+                entorno.lock().unwrap().definir(nombre, valor);
+                return Ok(());
+            }
+        }
+
         if crate::paquetes::es_ruta_paquete(modulo) {
             let ruta = crate::paquetes::resolver_importacion(modulo, &self.ruta_base)?;
             let valor = self.importar_archivo(&ruta.to_string_lossy())?;
@@ -2651,7 +2669,115 @@ impl Interprete {
         Ok(())
     }
 
+    fn importar_en_bundle(
+        &mut self,
+        bundle: &Arc<crate::bundle::Bundle>,
+        modulo: &str,
+        alias: Option<String>,
+        entorno: &Arc<Mutex<Entorno>>,
+    ) -> Result<(), Error> {
+        let propio = bundle.manifiesto().is_some_and(|manifiesto| {
+            !manifiesto.nombre.is_empty()
+                && (modulo == manifiesto.nombre
+                    || modulo.starts_with(&format!("{}/", manifiesto.nombre)))
+        });
+        let es_paquete = propio || crate::paquetes::es_ruta_paquete(modulo);
+
+        let clave = if es_paquete {
+            bundle.resolver_paquete(modulo)
+        } else {
+            let base = self.ruta_base.to_string_lossy().replace('\\', "/");
+            bundle.resolver_archivo(&base, modulo)
+        }
+        .ok_or_else(|| {
+            Error::ejecucion(format!(
+                "el bundle no contiene '{}'; reconstruye con `vaca construir`",
+                modulo
+            ))
+        })?;
+
+        let valor = self.importar_clave(bundle, &clave)?;
+        let nombre = alias.unwrap_or_else(|| {
+            if es_paquete {
+                modulo.rsplit('/').next().unwrap_or(modulo).to_string()
+            } else {
+                Path::new(modulo)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(modulo)
+                    .to_string()
+            }
+        });
+        entorno.lock().unwrap().definir(nombre, valor);
+        Ok(())
+    }
+
+    fn importar_clave(
+        &mut self,
+        bundle: &Arc<crate::bundle::Bundle>,
+        clave: &str,
+    ) -> Result<Value, Error> {
+        let ruta_virtual = PathBuf::from(clave);
+        if let Some(valor) = self.modulos_archivo.get(&ruta_virtual) {
+            return Ok(valor.clone());
+        }
+        if !self.importando.insert(ruta_virtual.clone()) {
+            return Err(Error::ejecucion(format!(
+                "importación circular detectada en '{}'",
+                clave
+            )));
+        }
+
+        let anterior = self.ruta_base.clone();
+        self.ruta_base = ruta_virtual
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
+
+        let resultado = (|| -> Result<Value, Error> {
+            let fuente = bundle
+                .texto(clave)
+                .ok_or_else(|| Error::ejecucion(format!("el bundle no contiene '{}'", clave)))?;
+            let programa = Parser::desde_codigo(fuente)?.parsear_programa()?;
+            self.analizar(&programa)?;
+            let entorno = Entorno::nuevo(Some(self.global.clone()));
+            self.hoistar(&programa, &entorno)?;
+            match self.ejecutar_lista(&programa, &entorno)? {
+                Flujo::Normal => {}
+                _ => {
+                    return Err(Error::ejecucion(
+                        "flujo de control inválido en el nivel superior del módulo",
+                    ))
+                }
+            }
+            let miembros = entorno.lock().unwrap().valores.clone();
+            let nombre = Path::new(clave)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("modulo")
+                .to_string();
+            Ok(Value::Modulo(Arc::new(Modulo { nombre, miembros })))
+        })();
+
+        self.ruta_base = anterior;
+        self.importando.remove(&ruta_virtual);
+        let valor = resultado?;
+        self.modulos_archivo.insert(ruta_virtual, valor.clone());
+        Ok(valor)
+    }
+
     fn importar_archivo(&mut self, modulo: &str) -> Result<Value, Error> {
+        if let Some(bundle) = self.bundle.clone() {
+            let base = self.ruta_base.to_string_lossy().replace('\\', "/");
+            let clave = bundle.resolver_archivo(&base, modulo).ok_or_else(|| {
+                Error::ejecucion(format!(
+                    "no se pudo importar '{}': no está en el bundle",
+                    modulo
+                ))
+            })?;
+            return self.importar_clave(&bundle, &clave);
+        }
+
         let mut ruta = if Path::new(modulo).is_absolute() {
             PathBuf::from(modulo)
         } else {
@@ -2843,7 +2969,15 @@ fn normalizar_indice(i: i64, len: i64) -> i64 {
 }
 
 fn modulo_nombre(modulo: &str) -> String {
-    modulo.split('.').next_back().unwrap_or(modulo).to_string()
+    if modulo.contains('/') || modulo.ends_with(".vaca") {
+        Path::new(modulo)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(modulo)
+            .to_string()
+    } else {
+        modulo.split('.').next_back().unwrap_or(modulo).to_string()
+    }
 }
 
 // ----------------------------------------------------------------------

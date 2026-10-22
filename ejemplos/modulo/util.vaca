@@ -1,0 +1,3 @@
+fn saludo(nombre) {
+    retornar a"¡Hola, {nombre} desde un subpaquete!"
+}

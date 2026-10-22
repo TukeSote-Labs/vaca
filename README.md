@@ -14,9 +14,13 @@ runtime externo.
 - **Concurrencia real con hilos**: `async fn`, `esperar`, contadores atómicos y
   servidor HTTP que atiende conexiones en paralelo.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
+- **Módulos estilo Go**: `vaca.mod`, entrada `iniciar.vaca` y `principal()`
+  automática.
+- **Bundles de producción**: `vaca construir` genera un único `.vaca`
+  autocontenido y verificado con SHA-256.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 91 pruebas automatizadas y ejemplos ejecutables.
+- 100 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** compilador a bytecode con VM de pila para funciones, con
 > intérprete de árbol como respaldo para las construcciones que la VM aún no
@@ -80,6 +84,104 @@ cargo run -- hola.vaca
 
 La extensión `.vaca` no es obligatoria para el intérprete, pero es la
 convención del lenguaje.
+
+### Crear un módulo (estilo Go)
+
+Para un programa completo conviene usar un módulo. Un módulo declara su
+nombre, su archivo de entrada y sus dependencias:
+
+```bash
+mkdir mi-api
+cd mi-api
+vaca init ejemplo.com/mi-api
+```
+
+Esto crea dos archivos:
+
+```text
+vaca.mod       # nombre, versión, entrada y dependencias
+iniciar.vaca   # punto de entrada con fn principal()
+```
+
+`vaca.mod` usa un formato de texto parecido a `go.mod`:
+
+```text
+modulo ejemplo.com/mi-api
+version 0.1.0
+inicio iniciar.vaca
+```
+
+`iniciar.vaca` se genera con una función `principal()`:
+
+```vaca
+fn principal() {
+    imprimir("Hola desde ejemplo.com/mi-api")
+}
+```
+
+Ejecuta el módulo desde cualquier subdirectorio:
+
+```bash
+vaca            # busca la raíz del módulo, ejecuta iniciar.vaca y llama a principal()
+vaca .          # equivalente
+vaca run        # equivalente
+```
+
+Si el archivo no define `principal()`, solo se ejecuta su nivel superior. La
+misma regla se aplica con `vaca archivo.vaca`, así que puedes probar la entrada
+del módulo directamente.
+
+### Importar subpaquetes del propio módulo
+
+Además de los paquetes externos, puedes importar archivos de tu módulo con su
+ruta completa:
+
+```vaca
+# util.vaca
+fn despedida(nombre) {
+    retornar "Adiós, " + nombre
+}
+
+# iniciar.vaca
+importar "ejemplo.com/mi-api/util"
+
+fn principal() {
+    imprimir(util.despedida("Vaca"))
+}
+```
+
+`util` se busca como `util.vaca` o `util/paquete.vaca` en la raíz del módulo.
+
+### Construir para producción
+
+`vaca construir` empaqueta el módulo en **un solo archivo**:
+
+```bash
+vaca construir
+```
+
+```text
+Empaquetado .vaca/dist/mi-api.vaca (12.4 KiB)
+  módulo:  ejemplo.com/mi-api
+  entrada: iniciar.vaca
+  sha256:  d52795c9…
+```
+
+El bundle incluye el código del módulo, `vaca.mod`, `vaca.lock` y las
+dependencias de `.vaca/paquetes/`. Al ejecutarlo, Vaca verifica el SHA-256 y
+carga los módulos en memoria, sin resolver rutas del proyecto:
+
+```bash
+scp .vaca/dist/mi-api.vaca servidor:/srv/
+vaca mi-api.vaca
+```
+
+- Si un solo byte cambia, el arranque falla con `el bundle está corrupto`.
+- El archivo `.vaca/dist/mi-api.vaca.sha256` permite verificar la descarga con
+  `sha256sum -c`.
+- El bundle contiene **código**, no datos: `.env`, CSV, certificados y demás
+  archivos se leen desde el sistema de archivos en tiempo de ejecución.
+- Antes de construir, ejecuta `vaca instalar` si el módulo tiene dependencias.
 
 ### Ejemplos incluidos
 
@@ -202,11 +304,15 @@ una aplicación.
 ### Comandos disponibles
 
 ```bash
-vaca <archivo.vaca>        # ejecuta un programa
-vaca run <archivo.vaca>    # igual que el anterior
+vaca                       # ejecuta el módulo del directorio actual
+vaca <archivo.vaca>        # ejecuta un programa o un bundle
+vaca <directorio>          # ejecuta el módulo de ese directorio
+vaca run [archivo]         # igual que arriba (sin archivo: el módulo)
 vaca repl                  # consola interactiva (multilínea con llaves)
 vaca tokens <archivo>      # muestra los tokens
 vaca ast <archivo>         # muestra el AST
+vaca init <modulo>         # crea vaca.mod e iniciar.vaca
+vaca construir             # empaqueta en .vaca/dist/<nombre>.vaca
 vaca --version
 vaca --ayuda
 ```
@@ -862,29 +968,34 @@ http.servidor("0.0.0.0", 8090, manejador, 1000)
 
 ## Paquetes
 
-Vaca tiene módulos al estilo de Go: declaras la ruta del repositorio y una
-versión semver, y `vaca instalar` fija el commit y un hash en `vaca.lock`.
+Los paquetes externos se declaran en el mismo `vaca.mod`. Cada dependencia es
+una ruta de repositorio y una restricción semver; `vaca instalar` fija el
+commit y un hash en `vaca.lock`.
 
 ```bash
-vaca init ejemplo.com/mi-api
+vaca init ejemplo.com/mi-api   # si aún no existe el módulo
 vaca agregar github.com/usuario/util@1.2.0
 vaca instalar
 vaca actualizar
 vaca listar
+vaca construir
 ```
 
-`vaca.paquete`:
+`vaca.mod` queda así:
 
-```json
-{
-  "nombre": "ejemplo.com/mi-api",
-  "version": "0.1.0",
-  "dependencias": {
-    "github.com/usuario/util": "^1.2.0"
-  },
-  "reemplazos": {},
-  "origenes": {}
-}
+```text
+modulo ejemplo.com/mi-api
+version 0.1.0
+inicio iniciar.vaca
+
+requiere github.com/usuario/util ^1.2.0
+```
+
+Opcionalmente, puedes fijar el origen y desarrollar contra un directorio local:
+
+```text
+origen github.com/usuario/util https://git.ejemplo.com/util.git
+reemplaza github.com/usuario/util ../util
 ```
 
 ```vaca
@@ -896,10 +1007,12 @@ imprimir(util.saludo("Vaca"))
 - Se admiten `^`, `~`, `>=`, `<`, versión exacta y `*`.
 - Se instalan dependencias transitivas y se detectan restricciones
   incompatibles.
-- `origenes` permite apuntar a un git propio o a `file://` (pruebas).
-- `reemplazos` copia un directorio local para desarrollar un paquete.
+- `origen` permite apuntar a un git propio o a `file://` (pruebas).
+- `reemplaza` copia un directorio local para desarrollar un paquete.
 - El lock fija versión, commit y SHA-256 del árbol; si algo cambia, la
   instalación falla.
+- Los paquetes antiguos con `vaca.paquete` (JSON) se siguen leyendo, pero
+  `vaca init` y `vaca agregar` escriben `vaca.mod`.
 - Requiere `git`. Los paquetes ejecutan código con tus permisos: revísalos.
 
 Consulta [Paquetes](landing/src/pages/docs/paquetes.md) para la referencia
@@ -966,7 +1079,8 @@ src/
   value.rs          Valores en tiempo de ejecución
   bytecode.rs       Instrucciones y unidades de código de la VM
   compilador.rs     AST → bytecode
-  paquetes.rs       Manifiesto, versiones, git, lockfile y vendor
+  bundle.rs         Formato de producción y verificación SHA-256
+  paquetes.rs       Módulos, versiones, git, lockfile y vendor
   rapido.rs         Hasher FNV-1a interno
   interprete.rs     Intérprete de árbol, VM y métodos nativos
   modulos/
@@ -981,7 +1095,7 @@ src/
     sistema.rs      Entorno y proceso
     concurrencia.rs Tareas, contadores atómicos e hilos
 ejemplos/           Programas de ejemplo
-tests/              Pruebas de lenguaje, VM, TLS y paquetes
+tests/              Pruebas de lenguaje, VM, TLS, módulos y paquetes
 scripts/            Prueba de humo de los servidores HTTP
 packaging/          Empaquetado, Docker y systemd
   empaquetar.sh     Genera el tarball distribuible

@@ -35,6 +35,19 @@ cargo run -- ejemplos/<archivo>.vaca
 | `servidor.vaca` | Servidor HTTP básico con rutas y JSON. |
 | `servidor_api.vaca` | API JSON con validación, rate limiting y estado en memoria. |
 | `servidor_concurrente.vaca` | Servidor de estrés: conexiones en paralelo, métricas atómicas y eco JSON. |
+| `modulo/` | Módulo completo con `vaca.mod`, `iniciar.vaca`, `principal()` y subpaquete. |
+
+## Módulo completo
+
+`ejemplos/modulo/` es un módulo ejecutable con manifiesto, entrada y un
+subpaquete propio:
+
+```bash
+cd ejemplos/modulo
+vaca                              # ejecuta iniciar.vaca y principal()
+vaca construir                    # genera .vaca/dist/modulo.vaca
+vaca .vaca/dist/modulo.vaca       # ejecuta el bundle
+```
 
 ## Pruebas de los servidores
 

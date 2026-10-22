@@ -2,6 +2,7 @@
 
 pub mod analizador;
 pub mod ast;
+pub mod bundle;
 pub mod bytecode;
 pub mod compilador;
 pub mod error;

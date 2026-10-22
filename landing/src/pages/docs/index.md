@@ -111,8 +111,8 @@ Ada
 - **[HTTP y concurrencia](/docs/servidor/)**: servidor, cliente, hilos,
   límites de conexión y despliegue.
 - **[Ejemplos de uso](/docs/ejemplos/)**: programas completos con su salida.
-- **[Paquetes](/docs/paquetes/)**: manifiesto, versiones, git, lockfile y
-  reemplazos locales.
+- **[Módulos y paquetes](/docs/paquetes/)**: `vaca.mod`, entrada
+  `iniciar.vaca`, versiones, git, lockfile y bundles de producción.
 - **[Herramientas](/docs/herramientas/)**: CLI, REPL, editor, empaquetado,
   pruebas y diagnóstico de errores.
 - **[Referencia rápida](/docs/referencia/)**: palabras clave, operadores,
@@ -137,9 +137,10 @@ Ada
 Vaca está en la versión **0.1.0**. El lenguaje, la biblioteca estándar, la
 concurrencia real y el servidor HTTP están implementados. Las funciones se
 compilan a bytecode y se ejecutan en una VM de pila, con el intérprete de árbol
-como respaldo para `intentar`, cierres anidados e `importar`. Todavía no hay
-comprobación estática de tipos, recolector de basura, formateador ni gestor de
-paquetes.
+como respaldo para `intentar`, cierres anidados e `importar`. También hay
+módulos (`vaca.mod` + `iniciar.vaca`), gestor de paquetes y bundles de
+producción verificados. Todavía no hay comprobación estática de tipos,
+recolector de basura ni formateador.
 
 Consulta la [referencia rápida](/docs/referencia/#limitaciones) para ver la
 lista completa de límites antes de llevar Vaca a producción.
