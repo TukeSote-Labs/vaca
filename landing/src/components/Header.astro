@@ -1,16 +1,18 @@
 ---
 import Logo from "./Logo.astro";
+import { normalizar, paginas } from "../lib/navegacion";
 
 const enlaces = [
     ["/#caracteristicas", "Características"],
     ["/#codigo", "Código"],
     ["/#estado", "Estado"],
     ["/#instalar", "Instalar"],
-    ["/docs/", "Docs"],
 ];
 
 const GITHUB = "https://github.com/ulf-frostypaw/vaca";
 const enDocs = Astro.url.pathname.startsWith("/docs");
+const actual = normalizar(Astro.url.pathname);
+const esDocActiva = (href: string) => normalizar(href) === actual;
 ---
 
 <header class="cabecera">
@@ -21,15 +23,41 @@ const enDocs = Astro.url.pathname.startsWith("/docs");
             <span class="version">v0.1.0</span>
         </a>
 
-        <nav class="navegacion" aria-label="Secciones de la página">
+        <nav class="navegacion" aria-label="Secciones del sitio">
             {enlaces.map(([href, texto]) => (
-                <a
-                    href={href}
-                    class:list={{ activo: href === "/docs/" && enDocs }}
-                >
-                    {texto}
-                </a>
+                <a href={href}>{texto}</a>
             ))}
+
+            <details class="menu-docs">
+                <summary class:list={["docs-boton", { activo: enDocs }]}>
+                    <span>Docs</span>
+                    <span class="flecha" aria-hidden="true">
+                        ▾
+                    </span>
+                </summary>
+
+                <div class="panel">
+                    <p class="panel-titulo">Documentación</p>
+                    <div class="panel-grupos">
+                        {paginas.map((pagina) => {
+                            const activa = esDocActiva(pagina.href);
+                            return (
+                                <a
+                                    href={pagina.href}
+                                    class:list={{ activo: activa }}
+                                    aria-current={activa ? "page" : undefined}
+                                >
+                                    <span>{pagina.titulo}</span>
+                                    <small>{pagina.descripcion}</small>
+                                </a>
+                            );
+                        })}
+                    </div>
+                    <a class="panel-todos" href="/docs/">
+                        Ver toda la documentación →
+                    </a>
+                </div>
+            </details>
         </nav>
 
         <a class="github" href={GITHUB} target="_blank" rel="noreferrer">
@@ -43,6 +71,32 @@ const enDocs = Astro.url.pathname.startsWith("/docs");
         </a>
     </div>
 </header>
+
+<script>
+    const menu = document.querySelector<HTMLDetailsElement>(".menu-docs");
+
+    if (menu) {
+        menu.querySelectorAll("a").forEach((enlace) => {
+            enlace.addEventListener("click", () =>
+                menu.removeAttribute("open"),
+            );
+        });
+
+        document.addEventListener("click", (evento) => {
+            if (
+                menu.open &&
+                evento.target instanceof Node &&
+                !menu.contains(evento.target)
+            ) {
+                menu.open = false;
+            }
+        });
+
+        document.addEventListener("keydown", (evento) => {
+            if (evento.key === "Escape") menu.open = false;
+        });
+    }
+</script>
 
 <style>
     .cabecera {
@@ -121,6 +175,150 @@ const enDocs = Astro.url.pathname.startsWith("/docs");
         transform: translate(-1px, -1px);
     }
 
+    .menu-docs {
+        position: relative;
+    }
+
+    .docs-boton {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.32rem;
+        padding: 0.35rem 0.55rem;
+        border: 2px solid transparent;
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        line-height: 1.2;
+        list-style: none;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition:
+            background 0.15s ease,
+            border-color 0.15s ease,
+            box-shadow 0.15s ease,
+            transform 0.15s ease;
+    }
+
+    .docs-boton::-webkit-details-marker {
+        display: none;
+    }
+
+    .docs-boton::marker {
+        content: "";
+    }
+
+    .docs-boton:hover,
+    .docs-boton.activo,
+    .menu-docs[open] .docs-boton {
+        border-color: var(--tinta);
+        background: var(--amarillo);
+        box-shadow: 3px 3px 0 var(--tinta);
+        transform: translate(-1px, -1px);
+    }
+
+    .docs-boton:focus-visible,
+    .panel a:focus-visible {
+        outline: 3px solid var(--tinta);
+        outline-offset: 1px;
+    }
+
+    .flecha {
+        font-size: 0.6rem;
+        line-height: 1;
+        transition: transform 0.15s ease;
+    }
+
+    .menu-docs[open] .flecha {
+        transform: rotate(180deg);
+    }
+
+    .panel {
+        position: absolute;
+        top: calc(100% + 0.8rem);
+        right: 0;
+        z-index: 60;
+        display: grid;
+        gap: 0.35rem;
+        width: min(22rem, calc(100vw - 2rem));
+        padding: 0.65rem;
+        border: var(--borde);
+        background: var(--blanco);
+        box-shadow: var(--sombra);
+    }
+
+    .panel-titulo {
+        margin: 0;
+        padding: 0.2rem 0.35rem;
+        background: var(--tinta);
+        color: var(--amarillo);
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    .panel-grupos {
+        display: grid;
+        gap: 0.15rem;
+        max-height: min(60vh, 30rem);
+        overflow-y: auto;
+    }
+
+    .panel-grupos a {
+        display: block;
+        padding: 0.42rem 0.5rem;
+        border: 2px solid transparent;
+        color: var(--tinta);
+        font-size: 0.8rem;
+        font-weight: 700;
+        line-height: 1.2;
+        text-decoration: none;
+    }
+
+    .panel-grupos a:hover {
+        border-color: var(--tinta);
+        background: var(--amarillo);
+        box-shadow: 2px 2px 0 var(--tinta);
+    }
+
+    .panel-grupos a.activo {
+        border-color: var(--tinta);
+        background: var(--tinta);
+        color: var(--amarillo);
+    }
+
+    .panel-grupos small {
+        display: block;
+        margin-top: 0.12rem;
+        color: #6f6a61;
+        font-size: 0.62rem;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+
+    .panel-grupos a.activo small {
+        color: var(--cian);
+    }
+
+    .panel-todos {
+        margin-top: 0.1rem;
+        padding: 0.45rem 0.5rem 0.2rem;
+        border-top: 2px solid var(--tinta);
+        color: var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.64rem;
+        font-weight: 700;
+        text-decoration: none;
+        text-transform: uppercase;
+    }
+
+    .panel-todos:hover {
+        background: var(--cian);
+    }
+
     .github {
         display: inline-flex;
         align-items: center;
@@ -154,15 +352,31 @@ const enDocs = Astro.url.pathname.startsWith("/docs");
 
     @media (max-width: 900px) {
         .navegacion {
+            margin-left: auto;
+        }
+
+        .navegacion > a {
             display: none;
         }
 
+        .panel {
+            position: fixed;
+            top: 5.4rem;
+            right: 0.75rem;
+            left: 0.75rem;
+            width: auto;
+        }
+
         .github {
-            margin-left: auto;
+            margin-left: 0.35rem;
         }
     }
 
     @media (max-width: 520px) {
+        .interior {
+            gap: 0.5rem;
+        }
+
         .version,
         .github span {
             display: none;

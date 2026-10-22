@@ -35,7 +35,10 @@ const GITHUB = 'https://github.com/ulf-frostypaw/vaca';
 
     <div class="principal">
       <details class="menu-movil">
-        <summary>Menú de documentación</summary>
+        <summary>
+          <span>Menú de documentación</span>
+          <small>{titulo}</small>
+        </summary>
         <div class="menu-cuerpo">
           <DocsNav />
         </div>
@@ -148,14 +151,39 @@ const GITHUB = 'https://github.com/ulf-frostypaw/vaca';
   }
 
   .menu-movil summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6rem;
     padding: 0.65rem 0.8rem;
     background: var(--amarillo);
     font-family: var(--mono);
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.05em;
+    list-style: none;
     text-transform: uppercase;
     cursor: pointer;
+  }
+
+  .menu-movil summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .menu-movil summary::marker {
+    content: '';
+  }
+
+  .menu-movil summary small {
+    color: #5f5a52;
+    font-size: 0.6rem;
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60%;
   }
 
   .menu-cuerpo {

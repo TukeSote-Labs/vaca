@@ -1,111 +1,327 @@
 ---
-const grupos = [
-  {
-    titulo: 'Empezar',
-    enlaces: [
-      ['/docs/', 'Introducción'],
-      ['/docs/lenguaje/', 'El lenguaje'],
-    ],
-  },
-  {
-    titulo: 'Biblioteca',
-    enlaces: [
-      ['/docs/modulos/', 'Módulos nativos'],
-      ['/docs/servidor/', 'HTTP y concurrencia'],
-    ],
-  },
-  {
-    titulo: 'Práctica',
-    enlaces: [
-      ['/docs/ejemplos/', 'Ejemplos de uso'],
-      ['/docs/paquetes/', 'Módulos y paquetes'],
-      ['/docs/herramientas/', 'Herramientas'],
-      ['/docs/referencia/', 'Referencia rápida'],
-    ],
-  },
-];
+import { navegacion, normalizar } from "../lib/navegacion";
 
-const normalizar = (ruta: string) => (ruta.length > 1 ? ruta.replace(/\/$/, '') : ruta);
 const actual = normalizar(Astro.url.pathname);
+const esActiva = (href: string) => actual === normalizar(href);
 ---
 
-<nav class="nav" aria-label="Documentación">
-  {
-    grupos.map((grupo) => (
-      <div class="grupo">
-        <p class="grupo-titulo">{grupo.titulo}</p>
-        <ul>
-          {grupo.enlaces.map(([href, texto]) => {
-            const activo = actual === normalizar(href);
-            return (
-              <li>
-                <a
-                  href={href}
-                  class:list={['enlace', { activo }]}
-                  aria-current={activo ? 'page' : undefined}
-                >
-                  {texto}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    ))
-  }
+<nav class="nav" aria-label="Temas de documentación">
+    <p class="pista">Despliega un tema para ver sus secciones.</p>
+
+    {navegacion.map((grupo) => (
+        <section class="grupo">
+            <p class="grupo-titulo">{grupo.titulo}</p>
+
+            <div class="paginas">
+                {grupo.paginas.map((pagina) => {
+                    const activa = esActiva(pagina.href);
+                    return (
+                        <details class="pagina" open={activa}>
+                            <summary
+                                class:list={[
+                                    "pagina-titulo",
+                                    { activo: activa },
+                                ]}
+                                title={pagina.descripcion}
+                            >
+                                <span>{pagina.titulo}</span>
+                            </summary>
+                            <p class="pagina-descripcion">
+                                {pagina.descripcion}
+                            </p>
+                            <ul class="secciones">
+                                <li>
+                                    <a
+                                        class="general"
+                                        href={pagina.href}
+                                        aria-current={
+                                            activa ? "page" : undefined
+                                        }
+                                    >
+                                        Vista general
+                                    </a>
+                                </li>
+                                {pagina.secciones.map((seccion) => (
+                                    <li
+                                        class:list={[
+                                            seccion.nivel === 3
+                                                ? "nivel-3"
+                                                : "nivel-2",
+                                        ]}
+                                    >
+                                        <a
+                                            data-ancla
+                                            href={`${pagina.href}#${seccion.id}`}
+                                        >
+                                            {seccion.texto}
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
+                    );
+                })}
+            </div>
+        </section>
+    ))}
 </nav>
 
+<script>
+    const normalizarRuta = (ruta: string) =>
+        ruta.length > 1 ? ruta.replace(/\/$/, "") : ruta;
+
+    const rutaActual = normalizarRuta(window.location.pathname);
+    const enlaces = Array.from(
+        document.querySelectorAll<HTMLAnchorElement>("a[data-ancla]"),
+    ).filter(
+        (enlace) =>
+            normalizarRuta(new URL(enlace.href).pathname) === rutaActual,
+    );
+
+    const decodificar = (valor: string) => {
+        try {
+            return decodeURIComponent(valor);
+        } catch {
+            return valor;
+        }
+    };
+
+    const idDe = (enlace: HTMLAnchorElement) =>
+        decodificar(enlace.hash.slice(1));
+
+    const marcar = () => {
+        const actual = decodificar(window.location.hash.slice(1));
+        enlaces.forEach((enlace) => {
+            enlace.classList.toggle(
+                "activo",
+                actual !== "" && idDe(enlace) === actual,
+            );
+        });
+    };
+
+    marcar();
+    window.addEventListener("hashchange", marcar);
+
+    if ("IntersectionObserver" in window) {
+        const observador = new IntersectionObserver(
+            (entradas) => {
+                for (const entrada of entradas) {
+                    if (!entrada.isIntersecting) continue;
+                    const id = entrada.target.id;
+                    enlaces.forEach((enlace) => {
+                        enlace.classList.toggle("activo", idDe(enlace) === id);
+                    });
+                }
+            },
+            { rootMargin: "-15% 0px -70% 0px", threshold: 0 },
+        );
+
+        enlaces.forEach((enlace) => {
+            const destino = document.getElementById(idDe(enlace));
+            if (destino) observador.observe(destino);
+        });
+    }
+</script>
+
 <style>
-  .nav {
-    display: grid;
-    gap: 1.15rem;
-  }
+    .nav {
+        display: grid;
+        gap: 1rem;
+        max-height: calc(100vh - 15rem);
+        padding-right: 0.3rem;
+        overflow-y: auto;
+        scrollbar-width: thin;
+    }
 
-  .grupo-titulo {
-    margin-bottom: 0.3rem;
-    color: #7c766b;
-    font-family: var(--mono);
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
+    .pista {
+        margin: 0 0 0.2rem;
+        color: #6f6a61;
+        font-size: 0.68rem;
+        font-weight: 600;
+        line-height: 1.35;
+    }
 
-  ul {
-    display: grid;
-    gap: 0.28rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
+    .grupo {
+        display: grid;
+        gap: 0.3rem;
+    }
 
-  .enlace {
-    display: block;
-    padding: 0.38rem 0.55rem;
-    border: 2px solid transparent;
-    color: var(--tinta);
-    font-size: 0.82rem;
-    font-weight: 600;
-    line-height: 1.35;
-    text-decoration: none;
-    transition:
-      background 0.12s ease,
-      border-color 0.12s ease,
-      box-shadow 0.12s ease,
-      transform 0.12s ease;
-  }
+    .grupo-titulo {
+        display: flex;
+        align-items: center;
+        gap: 0.38rem;
+        margin: 0;
+        color: #6f6a61;
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
 
-  .enlace:hover {
-    border-color: var(--tinta);
-    background: var(--amarillo);
-    box-shadow: 2px 2px 0 var(--tinta);
-    transform: translate(-1px, -1px);
-  }
+    .grupo-titulo::before {
+        content: "";
+        flex: none;
+        width: 0.45rem;
+        height: 0.45rem;
+        border: 2px solid var(--tinta);
+        background: var(--amarillo);
+    }
 
-  .enlace.activo {
-    border-color: var(--tinta);
-    background: var(--tinta);
-    box-shadow: 2px 2px 0 var(--rosa);
-    color: var(--amarillo);
-  }
+    .grupo:nth-of-type(4n + 2) .grupo-titulo::before {
+        background: var(--rosa);
+    }
+
+    .grupo:nth-of-type(4n + 3) .grupo-titulo::before {
+        background: var(--cian);
+    }
+
+    .grupo:nth-of-type(4n + 4) .grupo-titulo::before {
+        background: var(--lima);
+    }
+
+    .paginas {
+        display: grid;
+        gap: 0.18rem;
+    }
+
+    .pagina {
+        min-width: 0;
+    }
+
+    .pagina-titulo {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.45rem;
+        padding: 0.4rem 0.45rem;
+        border: 2px solid transparent;
+        color: var(--tinta);
+        font-size: 0.8rem;
+        font-weight: 700;
+        line-height: 1.3;
+        list-style: none;
+        cursor: pointer;
+        transition:
+            background 0.12s ease,
+            border-color 0.12s ease,
+            box-shadow 0.12s ease,
+            transform 0.12s ease;
+    }
+
+    .pagina-titulo::-webkit-details-marker {
+        display: none;
+    }
+
+    .pagina-titulo::marker {
+        content: "";
+    }
+
+    .pagina-titulo::after {
+        content: "+";
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 1.05rem;
+        height: 1.05rem;
+        border: 2px solid var(--tinta);
+        background: var(--blanco);
+        box-shadow: 1px 1px 0 var(--tinta);
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .pagina[open] > .pagina-titulo::after {
+        content: "−";
+        background: var(--lima);
+    }
+
+    .pagina-titulo:hover {
+        border-color: var(--tinta);
+        background: var(--amarillo);
+        box-shadow: 2px 2px 0 var(--tinta);
+        transform: translate(-1px, -1px);
+    }
+
+    .pagina-titulo:focus-visible,
+    .secciones a:focus-visible {
+        outline: 3px solid var(--tinta);
+        outline-offset: 1px;
+    }
+
+    .pagina-titulo.activo,
+    .pagina-titulo.activo:hover {
+        border-color: var(--tinta);
+        background: var(--tinta);
+        color: var(--amarillo);
+    }
+
+    .pagina-titulo.activo::after {
+        background: var(--rosa);
+        color: var(--tinta);
+    }
+
+    .pagina-descripcion {
+        margin: 0.32rem 0.4rem 0 0.55rem;
+        color: #6f6a61;
+        font-size: 0.66rem;
+        font-weight: 600;
+        line-height: 1.35;
+    }
+
+    .secciones {
+        display: grid;
+        gap: 0.04rem;
+        margin: 0.28rem 0 0.45rem 0.45rem;
+        padding: 0 0 0 0.55rem;
+        border-left: 2px solid var(--tinta);
+        list-style: none;
+    }
+
+    .secciones a {
+        display: block;
+        padding: 0.23rem 0.38rem;
+        border: 1px solid transparent;
+        color: var(--tinta);
+        font-size: 0.74rem;
+        font-weight: 600;
+        line-height: 1.3;
+        text-decoration: none;
+    }
+
+    .secciones a:hover {
+        border-color: var(--tinta);
+        background: var(--cian);
+    }
+
+    .secciones a.activo {
+        border-color: var(--tinta);
+        background: var(--lima);
+        font-weight: 700;
+    }
+
+    .secciones .general {
+        color: #5f5a52;
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .secciones .nivel-3 a {
+        padding-left: 1rem;
+        color: #5f5a52;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    @media (max-width: 900px) {
+        .nav {
+            max-height: none;
+            padding-right: 0;
+            overflow: visible;
+        }
+    }
 </style>
