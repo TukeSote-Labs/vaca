@@ -65,7 +65,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "POST" y peticion.ruta == "/eco" {
-        datos = json.parse(peticion.cuerpo)
+        datos = json.convertir(peticion.cuerpo)
         retornar {"estado": 201,
                   "cuerpo": {"recibido": datos}}
     }
@@ -101,7 +101,7 @@ grandes = datos.filtrar(df, "monto", ">=", 100)
 ordenado = datos.ordenar(grandes, "monto", falso)
 resumen = datos.agrupar_resumir(ordenado, "ciudad", "monto", "suma")
 
-imprimir(json.stringify(resumen))
+imprimir(json.serializar(resumen))
 datos.guardar_csv(resumen, "resumen.csv")
 `,
     },

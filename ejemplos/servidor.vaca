@@ -44,7 +44,7 @@ fn manejador(peticion) {
 
     si peticion.metodo == "POST" y peticion.ruta == "/eco" {
         intentar {
-            cuerpo = json.parse(peticion.cuerpo)
+            cuerpo = json.convertir(peticion.cuerpo)
             retornar {
                 "estado": 201,
                 "cuerpo": {"recibido": cuerpo}

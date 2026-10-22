@@ -131,8 +131,8 @@ fn json_roundtrip_complejo() {
         r#"
         importar json
         original = {"a": [1, 2, 3], "b": {"c": verdadero}, "d": "texto con \"comillas\""}
-        serializado = json.stringify(original)
-        copia = json.parse(serializado)
+        serializado = json.serializar(original)
+        copia = json.convertir(serializado)
         imprimir(copia.a[2])
         imprimir(copia.b.c)
         imprimir(copia.d)

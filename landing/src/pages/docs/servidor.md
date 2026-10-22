@@ -22,7 +22,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "POST" y peticion.ruta == "/eco" {
-        datos = json.parse(peticion.cuerpo)
+        datos = json.convertir(peticion.cuerpo)
         retornar {"estado": 201, "cuerpo": {"recibido": datos}}
     }
 
@@ -142,7 +142,7 @@ fn manejador(peticion) {
 
     si peticion.metodo == "POST" y peticion.ruta == "/productos" {
         intentar {
-            datos = json.parse(peticion.cuerpo)
+            datos = json.convertir(peticion.cuerpo)
             si no datos.existe("nombre") {
                 retornar responder(400, {"error": "falta nombre"})
             }
@@ -418,7 +418,7 @@ entorno y a la red según el usuario que lo ejecute.
 - El servidor limita cabeceras a 64 KiB y cuerpo a 16 MiB, y rechaza
   `Transfer-Encoding`. Aun así, valida los tamaños en tu manejador si esperas
   cargas grandes.
-- `json.parse` rechaza JSON inválido y anidamiento excesivo, pero no valida
+- `json.convertir` rechaza JSON inválido y anidamiento excesivo, pero no valida
   esquemas; valida los campos a mano.
 - No hay autenticación ni rate limiting nativos. Impleméntalos en el
   manejador con diccionarios y contadores atómicos.

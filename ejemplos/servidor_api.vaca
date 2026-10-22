@@ -73,7 +73,7 @@ fn manejador(peticion) {
 
     si peticion.metodo == "POST" y peticion.ruta == "/api/productos" {
         intentar {
-            datos = json.parse(peticion.cuerpo)
+            datos = json.convertir(peticion.cuerpo)
             si no datos.existe("nombre") {
                 retornar responder(400, {"error": "falta el campo nombre"})
             }

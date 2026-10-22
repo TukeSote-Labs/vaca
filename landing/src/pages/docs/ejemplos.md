@@ -232,10 +232,10 @@ usuario = {
     "roles": ["admin", "dev"]
 }
 
-texto = json.stringify(usuario, verdadero)
+texto = json.serializar(usuario, verdadero)
 archivo.escribir("usuario.json", texto)
 
-leido = json.parse(archivo.leer("usuario.json"))
+leido = json.convertir(archivo.leer("usuario.json"))
 imprimir(leido.nombre)      # Ada
 imprimir(leido.roles[1])    # dev
 ```
@@ -309,7 +309,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "POST" y peticion.ruta == "/eco" {
-        retornar {"estado": 201, "cuerpo": json.parse(peticion.cuerpo)}
+        retornar {"estado": 201, "cuerpo": json.convertir(peticion.cuerpo)}
     }
 
     retornar {"estado": 404, "cuerpo": {"error": "no encontrada"}}

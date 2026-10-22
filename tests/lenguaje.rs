@@ -261,10 +261,10 @@ fn modulos_json_y_mate() {
         r#"
         importar json
         importar mate
-        datos = json.parse("{\"a\": 1, \"b\": [2, 3], \"c\": true}")
+        datos = json.convertir("{\"a\": 1, \"b\": [2, 3], \"c\": true}")
         imprimir(datos.a)
         imprimir(datos.b[1])
-        imprimir(json.stringify({"x": 1, "y": [verdadero, nulo]}))
+        imprimir(json.serializar({"x": 1, "y": [verdadero, nulo]}))
         imprimir(mate.promedio([10, 20, 30]))
         imprimir(mate.raiz(81))
         imprimir(mate.redondear(3.14159, 2))

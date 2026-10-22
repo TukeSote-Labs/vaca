@@ -1,4 +1,4 @@
-//! Módulo `json`: parse y stringify sin dependencias externas.
+//! Módulo `json`: conversión entre texto JSON y valores de Vaca.
 
 use std::sync::{Arc, Mutex};
 
@@ -11,10 +11,10 @@ pub fn modulo() -> Value {
     crear_modulo(
         "json",
         vec![
-            ("parse", nativa("json.parse", 1, 1, parse_nativo)),
+            ("convertir", nativa("json.convertir", 1, 1, parse_nativo)),
             (
-                "stringify",
-                nativa("json.stringify", 1, 2, stringify_nativo),
+                "serializar",
+                nativa("json.serializar", 1, 2, stringify_nativo),
             ),
             ("valido", nativa("json.valido", 1, 1, valido_nativo)),
         ],
@@ -30,7 +30,7 @@ fn parse_nativo(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
         Value::Texto(t) => t.clone(),
         otro => {
             return Err(Error::ejecucion(format!(
-                "'json.parse' espera un texto y recibió {}",
+                "'json.convertir' espera un texto y recibió {}",
                 otro.tipo_nombre()
             )))
         }

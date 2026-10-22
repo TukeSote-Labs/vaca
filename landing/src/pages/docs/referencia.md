@@ -94,7 +94,7 @@ verdadero.
 
 | Módulo | Funciones principales |
 | :--- | :--- |
-| `json` | `parse`, `stringify`, `valido` |
+| `json` | `convertir`, `serializar`, `valido` |
 | `bd` | `conectar`, `sqlite`, `abrir_solo_lectura`; conexión: `consultar`, `ejecutar`, `una`, `valor`, `lote`, `iniciar`, `confirmar`, `revertir`, `cerrar`, `abierta`, `solo_lectura`, `motor`, `ruta`, `version` |
 | `mate` | `PI`, `E`, `raiz`, `potencia`, `redondear`, `piso`, `techo`, `absoluto`, `minimo`, `maximo`, `sumar`, `promedio`, `aleatorio`, `aleatorio_entero`, `logaritmo`, `seno`, `coseno`, `tangente` |
 | `tiempo` | `ahora`, `millis`, `dormir`, `fecha`, `fecha_iso`, `iso`, `formatear`, `partes`, `año`, `mes`, `dia`, `hora`, `minuto`, `segundo`, `dia_semana`, `dia_del_año`, `semana`, `minutos_totales`, `horas_totales`, `dias_totales` |

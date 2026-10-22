@@ -34,22 +34,22 @@ importar archivo
 ```vaca
 importar json
 
-datos = json.parse("{\"nombre\": \"Ada\", \"edad\": 36}")
+datos = json.convertir("{\"nombre\": \"Ada\", \"edad\": 36}")
 imprimir(datos.nombre)                       # Ada
 
-texto = json.stringify(datos)                 # compacto
-bonito = json.stringify(datos, verdadero)     # con indentación
+texto = json.serializar(datos)                # compacto
+bonito = json.serializar(datos, verdadero)    # con indentación
 valido = json.valido(texto)                   # verdadero
 ```
 
 | Función | Firma | Devuelve |
 | :--- | :--- | :--- |
-| `parse` | `json.parse(texto)` | Lista, diccionario, texto, número, lógico o `nulo` |
-| `stringify` | `json.stringify(valor, indentar = falso)` | Texto JSON |
+| `convertir` | `json.convertir(texto)` | Lista, diccionario, texto, número, lógico o `nulo` |
+| `serializar` | `json.serializar(valor, indentar = falso)` | Texto JSON |
 | `valido` | `json.valido(texto)` | Lógico |
 
-`json.parse` lanza un error de ejecución si el texto no es JSON válido o si el
-anidamiento supera los 300 niveles. `json.stringify` serializa listas,
+`json.convertir` lanza un error de ejecución si el texto no es JSON válido o si el
+anidamiento supera los 300 niveles. `json.serializar` serializa listas,
 diccionarios e instancias (por sus campos) y limita la profundidad a 128; las
 funciones, clases y tareas no son serializables.
 
@@ -175,7 +175,7 @@ intentar {
 | `BOOLEAN` (guardado como entero) | `0` / `1` |
 
 SQLite no tiene fecha nativa: guarda fechas como `TEXT` ISO o como epoch y
-conviértelas en Vaca. Las columnas JSON también son `TEXT`; usa `json.parse`.
+conviértelas en Vaca. Las columnas JSON también son `TEXT`; usa `json.convertir`.
 
 ### Notas
 

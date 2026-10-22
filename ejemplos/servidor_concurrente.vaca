@@ -52,7 +52,7 @@ fn manejador(peticion) {
     # Devuelve el JSON recibido, añadiendo el número de petición.
     si peticion.metodo == "POST" y peticion.ruta == "/eco" {
         intentar {
-            recibido = json.parse(peticion.cuerpo)
+            recibido = json.convertir(peticion.cuerpo)
             retornar {"cuerpo": {"recibido": recibido, "peticion": total}}
         } atrapar error {
             errores.incrementar()

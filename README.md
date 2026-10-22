@@ -20,7 +20,7 @@ runtime externo.
   autocontenido y verificado con SHA-256.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 112 pruebas automatizadas y ejemplos ejecutables.
+- 109 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** compilador a bytecode con VM de pila para funciones, con
 > intérprete de árbol como respaldo para las construcciones que la VM aún no
@@ -735,9 +735,9 @@ imprimir(visitas.obtener("total", 0))
 
 ```vaca
 importar json
-valor = json.parse("{\"a\": [1, 2]}")
-texto = json.stringify(valor)         # compacto
-bonito = json.stringify(valor, verdadero)
+valor = json.convertir("{\"a\": [1, 2]}")
+texto = json.serializar(valor)         # compacto
+bonito = json.serializar(valor, verdadero)
 valido = json.valido("{mal")
 ```
 
@@ -900,7 +900,7 @@ fn manejador(peticion) {
     }
 
     si peticion.metodo == "POST" y peticion.ruta == "/eco" {
-        cuerpo = json.parse(peticion.cuerpo)
+        cuerpo = json.convertir(peticion.cuerpo)
         retornar {"estado": 201, "cuerpo": {"recibido": cuerpo}}
     }
 
