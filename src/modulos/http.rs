@@ -1,22 +1,38 @@
-//! Módulo `http`: servidor y cliente HTTP/1.1 sobre TCP.
+//! Módulo `http`: servidor y cliente HTTP/1.1 sobre TCP y TLS.
 
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::fs;
+use std::io::{BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering as AtomicOrdering};
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use std::time::Duration;
+
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
+use rustls::{
+    ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned,
+};
 
 use crate::error::Error;
 use crate::interprete::Interprete;
 use crate::modulos::{crear_modulo, json};
 use crate::value::{MapaValores, Value};
 
+/// Tamaño máximo de las cabeceras de una petición.
+const MAX_CABECERAS: usize = 64 * 1024;
+/// Tamaño máximo del cuerpo de una petición.
+const MAX_CUERPO: usize = 16 * 1024 * 1024;
+
 pub fn modulo() -> Value {
     crear_modulo(
         "http",
         vec![
             ("servidor", nativa("http.servidor", 2, 4, servidor)),
+            (
+                "servidor_tls",
+                nativa("http.servidor_tls", 4, 6, servidor_tls),
+            ),
             ("peticion", nativa("http.peticion", 1, 4, peticion)),
             (
                 "codificar_url",
@@ -33,6 +49,94 @@ pub fn modulo() -> Value {
 
 fn nativa(nombre: &'static str, min: usize, max: usize, funcion: crate::value::NativaFn) -> Value {
     crate::modulos::nativa(nombre, min, max, funcion)
+}
+
+// ----------------------------------------------------------------------
+// TLS (rustls)
+// ----------------------------------------------------------------------
+
+/// Instala el proveedor criptográfico una sola vez por proceso.
+fn instalar_proveedor() {
+    static UNA_VEZ: Once = Once::new();
+    UNA_VEZ.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
+fn ruta_absoluta(interprete: &Interprete, ruta: &str) -> PathBuf {
+    let ruta = Path::new(ruta);
+    if ruta.is_absolute() {
+        ruta.to_path_buf()
+    } else {
+        interprete.ruta_base.join(ruta)
+    }
+}
+
+fn cargar_config_servidor(certificado: &Path, clave: &Path) -> Result<Arc<ServerConfig>, String> {
+    instalar_proveedor();
+
+    let bytes_certificado = fs::read(certificado).map_err(|e| {
+        format!(
+            "no se pudo leer el certificado '{}': {}",
+            certificado.display(),
+            e
+        )
+    })?;
+    let mut lector = BufReader::new(&bytes_certificado[..]);
+    let certificados: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut lector)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("certificado PEM inválido: {}", e))?;
+    if certificados.is_empty() {
+        return Err("el archivo de certificado no contiene ningún certificado PEM".to_string());
+    }
+
+    let bytes_clave = fs::read(clave)
+        .map_err(|e| format!("no se pudo leer la clave '{}': {}", clave.display(), e))?;
+    let mut lector = BufReader::new(&bytes_clave[..]);
+    let clave_privada: PrivateKeyDer<'static> = rustls_pemfile::private_key(&mut lector)
+        .map_err(|e| format!("clave PEM inválida: {}", e))?
+        .ok_or_else(|| "el archivo de clave no contiene una clave privada PEM".to_string())?;
+
+    let mut config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certificados, clave_privada)
+        .map_err(|e| format!("el certificado y la clave no son válidos: {}", e))?;
+    config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    Ok(Arc::new(config))
+}
+
+/// Configuración del cliente con las raíces de Mozilla y, si existe, `VACA_CA`.
+fn config_cliente() -> Result<Arc<ClientConfig>, String> {
+    static CONFIG: std::sync::OnceLock<Result<Arc<ClientConfig>, String>> =
+        std::sync::OnceLock::new();
+
+    CONFIG
+        .get_or_init(|| {
+            instalar_proveedor();
+            let mut raices = RootCertStore::empty();
+            raices.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+            if let Some(ruta) = std::env::var_os("VACA_CA") {
+                let ruta = PathBuf::from(ruta);
+                let bytes = fs::read(&ruta)
+                    .map_err(|e| format!("no se pudo leer VACA_CA '{}': {}", ruta.display(), e))?;
+                let mut lector = BufReader::new(&bytes[..]);
+                for certificado in rustls_pemfile::certs(&mut lector) {
+                    let certificado =
+                        certificado.map_err(|e| format!("VACA_CA inválido: {}", e))?;
+                    raices
+                        .add(certificado)
+                        .map_err(|e| format!("VACA_CA rechazado: {}", e))?;
+                }
+            }
+
+            let mut config = ClientConfig::builder()
+                .with_root_certificates(raices)
+                .with_no_client_auth();
+            config.alpn_protocols = vec![b"http/1.1".to_vec()];
+            Ok(Arc::new(config))
+        })
+        .clone()
 }
 
 // ----------------------------------------------------------------------
@@ -120,6 +224,68 @@ fn servidor(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Erro
         ),
         _ => unreachable!(),
     };
+    iniciar_servidor(interprete, host, puerto, manejador, limite, None)
+}
+
+fn servidor_tls(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
+    let (host, puerto, certificado, clave, manejador, limite) = match args.len() {
+        4 => (
+            "0.0.0.0".to_string(),
+            puerto_valor(&args[0])?,
+            args[1].a_texto(),
+            args[2].a_texto(),
+            args[3].clone(),
+            None,
+        ),
+        5 => {
+            // `(puerto, cert, clave, manejador, limite)` o
+            // `(host, puerto, cert, clave, manejador)`.
+            if args[0].a_entero_exacto().is_some() {
+                (
+                    "0.0.0.0".to_string(),
+                    puerto_valor(&args[0])?,
+                    args[1].a_texto(),
+                    args[2].a_texto(),
+                    args[3].clone(),
+                    limite_valor(&args[4])?,
+                )
+            } else {
+                (
+                    args[0].a_texto(),
+                    puerto_valor(&args[1])?,
+                    args[2].a_texto(),
+                    args[3].a_texto(),
+                    args[4].clone(),
+                    None,
+                )
+            }
+        }
+        6 => (
+            args[0].a_texto(),
+            puerto_valor(&args[1])?,
+            args[2].a_texto(),
+            args[3].a_texto(),
+            args[4].clone(),
+            limite_valor(&args[5])?,
+        ),
+        _ => unreachable!(),
+    };
+
+    let ruta_certificado = ruta_absoluta(interprete, &certificado);
+    let ruta_clave = ruta_absoluta(interprete, &clave);
+    let config = cargar_config_servidor(&ruta_certificado, &ruta_clave)
+        .map_err(|mensaje| Error::ejecucion(format!("http.servidor_tls: {}", mensaje)))?;
+    iniciar_servidor(interprete, host, puerto, manejador, limite, Some(config))
+}
+
+fn iniciar_servidor(
+    interprete: &mut Interprete,
+    host: String,
+    puerto: u16,
+    manejador: Value,
+    limite: Option<usize>,
+    tls: Option<Arc<ServerConfig>>,
+) -> Result<Value, Error> {
     if !manejador.es_llamable() {
         return Err(Error::ejecucion(
             "http.servidor espera una función manejadora como último argumento",
@@ -142,14 +308,15 @@ fn servidor(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Erro
     let hilos = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
+    let esquema = if tls.is_some() { "https" } else { "http" };
     match limite {
         Some(limite) => interprete.escribir_linea(&format!(
-            "Servidor Vaca escuchando en http://{} ({} hilos de CPU, límite {} conexiones)",
-            local, hilos, limite
+            "Servidor Vaca escuchando en {}://{} ({} hilos de CPU, límite {} conexiones)",
+            esquema, local, hilos, limite
         )),
         None => interprete.escribir_linea(&format!(
-            "Servidor Vaca escuchando en http://{} ({} hilos de CPU, conexiones ilimitadas)",
-            local, hilos
+            "Servidor Vaca escuchando en {}://{} ({} hilos de CPU, conexiones ilimitadas)",
+            esquema, local, hilos
         )),
     }
 
@@ -186,18 +353,23 @@ fn servidor(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Erro
 
         if let Some(limite) = limite {
             if activas.load(AtomicOrdering::SeqCst) >= limite {
-                // Descarta la petición ya enviada antes de cerrar. Sin esto,
-                // el socket se cierra con datos sin leer y el cliente puede
-                // recibir un RST en lugar del 503.
-                descartar_entrada(&mut stream);
-                let _ = escribir_respuesta(
-                    &mut stream,
-                    503,
-                    "Servidor ocupado, intenta de nuevo\n",
-                    "text/plain; charset=utf-8",
-                    &[("Retry-After".to_string(), "1".to_string())],
-                );
-                let _ = stream.shutdown(std::net::Shutdown::Read);
+                if tls.is_some() {
+                    // Sin hacer el handshake en el hilo aceptador: cerramos.
+                    let _ = stream.shutdown(std::net::Shutdown::Both);
+                } else {
+                    // Descarta la petición ya enviada antes de cerrar. Sin esto,
+                    // el socket se cierra con datos sin leer y el cliente puede
+                    // recibir un RST en lugar del 503.
+                    descartar_entrada(&mut stream);
+                    let _ = escribir_respuesta(
+                        &mut stream,
+                        503,
+                        "Servidor ocupado, intenta de nuevo\n",
+                        "text/plain; charset=utf-8",
+                        &[("Retry-After".to_string(), "1".to_string())],
+                    );
+                    let _ = stream.shutdown(std::net::Shutdown::Read);
+                }
                 continue;
             }
         }
@@ -208,6 +380,7 @@ fn servidor(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Erro
         let guardia = GuardiaActiva(Arc::clone(&activas));
         let ip = remoto.ip().to_string();
         activas.fetch_add(1, AtomicOrdering::SeqCst);
+        let tls = tls.clone();
 
         let inicio = std::thread::Builder::new()
             .name(format!("vaca-http-{}", ip))
@@ -216,7 +389,29 @@ fn servidor(interprete: &mut Interprete, args: Vec<Value>) -> Result<Value, Erro
                 // El guardián libera la plaza de conexión al salir del hilo,
                 // también si el intérprete entra en pánico.
                 let _guardia = guardia;
-                let resultado = atender_conexion(&mut trabajador, &mut stream, &manejador);
+                let resultado = match &tls {
+                    Some(config) => match ServerConnection::new(Arc::clone(config)) {
+                        Ok(conexion) => {
+                            let mut flujo = StreamOwned::new(conexion, stream);
+                            let resultado = atender_conexion(
+                                &mut trabajador,
+                                &mut flujo,
+                                &manejador,
+                                &ip,
+                                true,
+                            );
+                            // Cierre ordenado: avisa al cliente de que no habrá más datos.
+                            flujo.conn.send_close_notify();
+                            let _ = flujo.flush();
+                            resultado
+                        }
+                        Err(error) => {
+                            trabajador.escribir_linea(&format!("Error TLS: {}", error));
+                            Ok(())
+                        }
+                    },
+                    None => atender_conexion(&mut trabajador, &mut stream, &manejador, &ip, false),
+                };
                 match resultado {
                     Ok(()) => {}
                     Err(Error::Salir(codigo)) => {
@@ -263,15 +458,27 @@ fn limite_valor(valor: &Value) -> Result<Option<usize>, Error> {
     }
 }
 
-fn atender_conexion(
+fn atender_conexion<S: Read + Write>(
     interprete: &mut Interprete,
-    stream: &mut TcpStream,
+    stream: &mut S,
     manejador: &Value,
+    ip: &str,
+    es_tls: bool,
 ) -> Result<(), Error> {
     let solicitud = match leer_solicitud(stream) {
-        Ok(s) => s,
-        Err(mensaje) => {
-            let _ = escribir_respuesta(stream, 400, &mensaje, "text/plain; charset=utf-8", &[]);
+        Ok(mut s) => {
+            s.ip = ip.to_string();
+            s
+        }
+        Err((estado, mensaje)) => {
+            let _ = escribir_respuesta_segura(
+                stream,
+                estado,
+                &mensaje,
+                "text/plain; charset=utf-8",
+                &[],
+                es_tls,
+            );
             return Ok(());
         }
     };
@@ -296,7 +503,8 @@ fn atender_conexion(
                     Value::Texto(format!("Error interno: {}", valor.a_texto())),
                 ),
             ]));
-            escribir_respuesta(stream, estado, &cuerpo, &tipo, &extra).map_err(Error::ejecucion)?;
+            escribir_respuesta_segura(stream, estado, &cuerpo, &tipo, &extra, es_tls)
+                .map_err(Error::ejecucion)?;
             return Ok(());
         }
         Err(error) => {
@@ -307,13 +515,15 @@ fn atender_conexion(
                     Value::Texto(format!("Error interno: {}", error)),
                 ),
             ]));
-            escribir_respuesta(stream, estado, &cuerpo, &tipo, &extra).map_err(Error::ejecucion)?;
+            escribir_respuesta_segura(stream, estado, &cuerpo, &tipo, &extra, es_tls)
+                .map_err(Error::ejecucion)?;
             return Ok(());
         }
     };
 
     let (estado, cuerpo, tipo, extra) = construir_respuesta(respuesta);
-    escribir_respuesta(stream, estado, &cuerpo, &tipo, &extra).map_err(Error::ejecucion)?;
+    escribir_respuesta_segura(stream, estado, &cuerpo, &tipo, &extra, es_tls)
+        .map_err(Error::ejecucion)?;
     Ok(())
 }
 
@@ -386,8 +596,8 @@ fn construir_respuesta(valor: Value) -> (u16, String, String, Vec<(String, Strin
     }
 }
 
-fn escribir_respuesta(
-    stream: &mut TcpStream,
+fn escribir_respuesta<S: Write>(
+    stream: &mut S,
     estado: u16,
     cuerpo: &str,
     tipo: &str,
@@ -397,11 +607,15 @@ fn escribir_respuesta(
         "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
         estado,
         razon(estado),
-        tipo,
+        limpiar_cabecera(tipo),
         cuerpo.len()
     );
     for (clave, valor) in extra {
-        respuesta.push_str(&format!("{}: {}\r\n", clave, valor));
+        respuesta.push_str(&format!(
+            "{}: {}\r\n",
+            limpiar_cabecera(clave),
+            limpiar_cabecera(valor)
+        ));
     }
     respuesta.push_str("\r\n");
     respuesta.push_str(cuerpo);
@@ -412,24 +626,55 @@ fn escribir_respuesta(
     Ok(())
 }
 
-fn leer_solicitud(stream: &mut TcpStream) -> Result<Solicitud, String> {
+/// Evita inyección de cabeceras si el manejador refleja entrada del usuario.
+fn limpiar_cabecera(valor: &str) -> String {
+    valor
+        .chars()
+        .map(|c| if c == '\r' || c == '\n' { ' ' } else { c })
+        .collect()
+}
+
+fn escribir_respuesta_segura<S: Write>(
+    stream: &mut S,
+    estado: u16,
+    cuerpo: &str,
+    tipo: &str,
+    extra: &[(String, String)],
+    es_tls: bool,
+) -> Result<(), String> {
+    if es_tls {
+        let mut cabeceras = extra.to_vec();
+        cabeceras.push((
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000".to_string(),
+        ));
+        escribir_respuesta(stream, estado, cuerpo, tipo, &cabeceras)
+    } else {
+        escribir_respuesta(stream, estado, cuerpo, tipo, extra)
+    }
+}
+
+fn leer_solicitud<S: Read>(stream: &mut S) -> Result<Solicitud, (u16, String)> {
     let mut datos: Vec<u8> = Vec::new();
     let mut buffer = [0u8; 8192];
     let fin_cabeceras;
     loop {
         let leidos = stream
             .read(&mut buffer)
-            .map_err(|e| format!("no se pudo leer la solicitud: {}", e))?;
+            .map_err(|e| (400, format!("no se pudo leer la solicitud: {}", e)))?;
         if leidos == 0 {
-            return Err("conexión cerrada antes de completar la solicitud".to_string());
+            return Err((
+                400,
+                "conexión cerrada antes de completar la solicitud".to_string(),
+            ));
         }
         datos.extend_from_slice(&buffer[..leidos]);
         if let Some(pos) = buscar(&datos, b"\r\n\r\n") {
             fin_cabeceras = pos + 4;
             break;
         }
-        if datos.len() > 8 * 1024 * 1024 {
-            return Err("solicitud demasiado grande".to_string());
+        if datos.len() > MAX_CABECERAS {
+            return Err((431, "cabeceras demasiado grandes".to_string()));
         }
     }
 
@@ -437,10 +682,10 @@ fn leer_solicitud(stream: &mut TcpStream) -> Result<Solicitud, String> {
     let mut lineas = cabecera_texto.split("\r\n");
     let primera = lineas
         .next()
-        .ok_or_else(|| "solicitud HTTP vacía".to_string())?;
+        .ok_or_else(|| (400, "solicitud HTTP vacía".to_string()))?;
     let partes: Vec<&str> = primera.split_whitespace().collect();
     if partes.len() < 3 {
-        return Err("línea de solicitud HTTP inválida".to_string());
+        return Err((400, "línea de solicitud HTTP inválida".to_string()));
     }
     let metodo = partes[0].to_uppercase();
     let objetivo = partes[1].to_string();
@@ -456,15 +701,27 @@ fn leer_solicitud(stream: &mut TcpStream) -> Result<Solicitud, String> {
         }
     }
 
+    if cabeceras.contains_key("transfer-encoding") {
+        return Err((400, "transfer-encoding no soportado".to_string()));
+    }
     let longitud: usize = cabeceras
         .get("content-length")
         .and_then(|v| v.parse().ok())
         .unwrap_or(0);
-    let total = fin_cabeceras + longitud;
+    if longitud > MAX_CUERPO {
+        return Err((
+            413,
+            format!(
+                "cuerpo demasiado grande (máximo {} MiB)",
+                MAX_CUERPO / (1024 * 1024)
+            ),
+        ));
+    }
+    let total = fin_cabeceras.saturating_add(longitud);
     while datos.len() < total {
         let leidos = stream
             .read(&mut buffer)
-            .map_err(|e| format!("no se pudo leer el cuerpo: {}", e))?;
+            .map_err(|e| (400, format!("no se pudo leer el cuerpo: {}", e)))?;
         if leidos == 0 {
             break;
         }
@@ -492,11 +749,6 @@ fn leer_solicitud(stream: &mut TcpStream) -> Result<Solicitud, String> {
         }
     }
 
-    let ip = stream
-        .peer_addr()
-        .map(|a| a.ip().to_string())
-        .unwrap_or_default();
-
     Ok(Solicitud {
         metodo,
         ruta,
@@ -504,8 +756,23 @@ fn leer_solicitud(stream: &mut TcpStream) -> Result<Solicitud, String> {
         cabeceras,
         cuerpo,
         version,
-        ip,
+        ip: String::new(),
     })
+}
+
+/// Lee hasta EOF tolerando que el par cierre sin `close_notify`.
+fn leer_todo(stream: &mut impl Read) -> std::io::Result<Vec<u8>> {
+    let mut datos = Vec::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        match stream.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(n) => datos.extend_from_slice(&buffer[..n]),
+            Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(datos)
 }
 
 fn buscar(haystack: &[u8], needle: &[u8]) -> Option<usize> {
@@ -538,15 +805,21 @@ struct Url {
     host: String,
     puerto: u16,
     ruta: String,
+    tls: bool,
 }
 
 fn parsear_url(url: &str) -> Result<Url, String> {
-    let resto = if let Some(resto) = url.strip_prefix("http://") {
-        resto
-    } else if url.starts_with("https://") {
-        return Err("https no está soportado sin TLS; usa http:// o un proxy inverso".to_string());
+    let (resto, tls, puerto_por_defecto) = if let Some(resto) = url.strip_prefix("https://") {
+        (resto, true, 443)
+    } else if let Some(resto) = url.strip_prefix("http://") {
+        (resto, false, 80)
+    } else if url.contains("://") {
+        return Err(format!(
+            "esquema no soportado en '{}': usa http:// o https://",
+            url
+        ));
     } else {
-        url
+        (url, false, 80)
     };
     let (autoridad, ruta) = match resto.find('/') {
         Some(i) => (&resto[..i], &resto[i..]),
@@ -561,13 +834,45 @@ fn parsear_url(url: &str) -> Result<Url, String> {
             p.parse::<u16>()
                 .map_err(|_| format!("puerto inválido '{}'", p))?,
         ),
-        _ => (autoridad.to_string(), 80),
+        _ => (autoridad.to_string(), puerto_por_defecto),
     };
     Ok(Url {
         host,
         puerto,
         ruta: ruta.to_string(),
+        tls,
     })
+}
+
+/// Flujo de red que puede ser TCP plano o TLS.
+enum Flujo {
+    Plano(TcpStream),
+    Tls(Box<StreamOwned<ClientConnection, TcpStream>>),
+}
+
+impl Read for Flujo {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Flujo::Plano(stream) => stream.read(buffer),
+            Flujo::Tls(stream) => stream.read(buffer),
+        }
+    }
+}
+
+impl Write for Flujo {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Flujo::Plano(stream) => stream.write(buffer),
+            Flujo::Tls(stream) => stream.write(buffer),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Flujo::Plano(stream) => stream.flush(),
+            Flujo::Tls(stream) => stream.flush(),
+        }
+    }
 }
 
 fn peticion(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
@@ -596,14 +901,31 @@ fn peticion(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
     let socket = direcciones
         .next()
         .ok_or_else(|| Error::ejecucion(format!("no se pudo resolver '{}'", direccion)))?;
-    let mut stream = TcpStream::connect_timeout(&socket, Duration::from_secs(15))
+    let stream = TcpStream::connect_timeout(&socket, Duration::from_secs(15))
         .map_err(|e| Error::ejecucion(format!("no se pudo conectar con '{}': {}", direccion, e)))?;
     let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
 
+    let mut stream = if url.tls {
+        let config = config_cliente().map_err(Error::ejecucion)?;
+        let nombre = ServerName::try_from(url.host.clone()).map_err(|_| {
+            Error::ejecucion(format!("nombre de host inválido para TLS: '{}'", url.host))
+        })?;
+        let conexion = ClientConnection::new(config, nombre)
+            .map_err(|e| Error::ejecucion(format!("no se pudo iniciar TLS: {}", e)))?;
+        Flujo::Tls(Box::new(StreamOwned::new(conexion, stream)))
+    } else {
+        Flujo::Plano(stream)
+    };
+
+    let host_cabecera = if (url.tls && url.puerto != 443) || (!url.tls && url.puerto != 80) {
+        format!("{}:{}", url.host, url.puerto)
+    } else {
+        url.host.clone()
+    };
     let mut solicitud = format!(
         "{} {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: Vaca/0.1\r\nAccept: */*\r\nConnection: close\r\n",
-        metodo, url.ruta, url.host
+        metodo, url.ruta, host_cabecera
     );
     for (clave, valor) in &cabeceras_extra {
         let clave_min = clave.to_lowercase();
@@ -622,9 +944,7 @@ fn peticion(_: &mut Interprete, args: Vec<Value>) -> Result<Value, Error> {
         .map_err(|e| Error::ejecucion(format!("no se pudo enviar la petición: {}", e)))?;
     let _ = stream.flush();
 
-    let mut respuesta = Vec::new();
-    stream
-        .read_to_end(&mut respuesta)
+    let respuesta = leer_todo(&mut stream)
         .map_err(|e| Error::ejecucion(format!("no se pudo leer la respuesta: {}", e)))?;
 
     let separador = buscar(&respuesta, b"\r\n\r\n")
@@ -791,5 +1111,29 @@ fn razon(estado: u16) -> &'static str {
         502 => "Bad Gateway",
         503 => "Service Unavailable",
         _ => "OK",
+    }
+}
+
+#[cfg(test)]
+mod pruebas {
+    use super::*;
+
+    #[test]
+    fn las_cabeceras_no_permiten_inyectar_crlf() {
+        let mut salida = Vec::new();
+        escribir_respuesta(
+            &mut salida,
+            200,
+            "ok",
+            "text/plain",
+            &[("X-Test".to_string(), "a\r\nInjected: 1".to_string())],
+        )
+        .expect("escribir respuesta");
+        let texto = String::from_utf8(salida).expect("utf-8");
+        assert!(!texto.contains("\r\nInjected: 1"), "inyección: {}", texto);
+        assert!(
+            texto.contains("Injected: 1"),
+            "se conserva el valor saneado"
+        );
     }
 }

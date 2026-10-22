@@ -38,7 +38,7 @@ http.servidor(8080, manejador, 1000)
         <div class="texto">
             <p class="distintivo">
                 <span class="punto" aria-hidden="true"></span>
-                v0.1.0 · 75 pruebas · MIT
+                v0.1.0 · 79 pruebas · MIT
             </p>
 
             <h1>
@@ -50,8 +50,8 @@ http.servidor(8080, manejador, 1000)
             </h1>
 
             <p class="entrada">
-                Vaca es un lenguaje de servidores con un motor en Rust y cero
-                dependencias externas. Llaves, punto y coma opcional, análisis
+                Vaca es un lenguaje de servidores con un motor en Rust, sin
+                frameworks y con TLS auditado. Llaves, punto y coma opcional, análisis
                 de variables no usadas y concurrencia real. Para una API, un
                 pipeline de datos o un laboratorio de estrés.
             </p>
@@ -82,8 +82,8 @@ http.servidor(8080, manejador, 1000)
             </p>
 
             <div class="sellos" aria-hidden="true">
-                <span class="sello sello-rosa">0 dependencias</span>
-                <span class="sello sello-cian">75 pruebas</span>
+                <span class="sello sello-rosa">0 frameworks</span>
+                <span class="sello sello-cian">79 pruebas</span>
                 <span class="sello sello-lima">fase 10 completa</span>
             </div>
         </div>
@@ -99,7 +99,7 @@ http.servidor(8080, manejador, 1000)
                 <Codigo codigo={snippet} />
             </Ventana>
             <p class="pie-codigo">
-                Sin frameworks. Sin dependencias. Sin ceremonia.
+                Sin frameworks. Sin runtime externo. Sin ceremonia.
             </p>
         </div>
     </div>
@@ -115,11 +115,11 @@ http.servidor(8080, manejador, 1000)
         </div>
         <div>
             <dt>Motor</dt>
-            <dd>Intérprete en Rust</dd>
+            <dd>Bytecode + VM en Rust</dd>
         </div>
         <div>
             <dt>Dependencias</dt>
-            <dd>Cero</dd>
+            <dd>Rust estándar + rustls</dd>
         </div>
     </dl>
 </section>

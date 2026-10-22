@@ -6,7 +6,8 @@ description: "Referencia de la biblioteca estándar de Vaca: json, mate, tiempo,
 
 # Módulos nativos
 
-La biblioteca estándar se importa por nombre. No hay dependencias externas ni
+La biblioteca estándar se importa por nombre. El motor usa Rust estándar y
+`rustls` para TLS; no hay frameworks ni
 un gestor de paquetes: todo lo que aparece aquí viene con el binario.
 
 ```vaca
@@ -358,14 +359,16 @@ importar http
 
 http.servidor(8080, manejador)
 http.servidor("0.0.0.0", 8080, manejador, 1000)
+http.servidor_tls(8443, "servidor.pem", "servidor-clave.pem", manejador, 1000)
 
-respuesta = http.peticion("http://127.0.0.1:8080/salud")
+respuesta = http.peticion("https://127.0.0.1:8443/salud")
 ```
 
 | Función | Descripción |
 | :--- | :--- |
 | `servidor(...)` | Levanta un servidor HTTP concurrente |
-| `peticion(url, metodo = "GET", cuerpo = "", cabeceras = {})` | Cliente HTTP |
+| `servidor_tls(...)` | Servidor HTTPS con TLS 1.2/1.3 (rustls) |
+| `peticion(url, metodo = "GET", cuerpo = "", cabeceras = {})` | Cliente HTTP/HTTPS |
 | `codificar_url(texto)` / `decodificar_url(texto)` | Percent-encoding |
 | `estado(codigo)` | Texto de la razón HTTP |
 

@@ -7,7 +7,7 @@ description: "Servidor y cliente HTTP, tareas async, hilos, contadores atómicos
 # HTTP y concurrencia
 
 Vaca incluye un servidor HTTP/1.1 concurrente, un cliente HTTP y un modelo de
-tareas basado en **hilos del sistema**. No hay `tokio` ni dependencias
+tareas basado en **hilos del sistema**. No hay `tokio` ni frameworks
 externas: el runtime es el binario.
 
 ## Servidor HTTP
@@ -39,6 +39,9 @@ http.servidor(puerto, manejador)
 http.servidor(host, puerto, manejador)
 http.servidor(puerto, manejador, limite)
 http.servidor(host, puerto, manejador, limite)
+
+http.servidor_tls(puerto, cert, clave, manejador)
+http.servidor_tls(host, puerto, cert, clave, manejador, limite)
 ```
 
 - `host` por defecto es `"0.0.0.0"`.
@@ -283,7 +286,8 @@ respuesta = http.peticion(
 | `cabeceras` | Diccionario |
 | `cuerpo` | Texto |
 
-Solo se admite `http://`. Para HTTPS usa un proxy inverso con TLS.
+Se admiten `http://` y `https://`. En HTTPS se valida el certificado contra las
+raíces de Mozilla; `VACA_CA` añade una CA propia.
 
 ## Laboratorio de estrés
 
@@ -374,20 +378,35 @@ docker run --rm -p 8080:8080 vaca:0.1.0
 
 ### TLS
 
-Vaca no termina TLS. Usa Nginx, Caddy o un balanceador delante:
+Vaca termina TLS de forma nativa con `rustls` (TLS 1.2 y 1.3):
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name api.ejemplo.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
+```vaca
+http.servidor_tls("0.0.0.0", 8443, "servidor.pem", "servidor-clave.pem", manejador, 1000)
 ```
+
+Las rutas se resuelven contra el directorio del script. El certificado puede
+incluir la cadena completa; la clave admite PKCS#8, PKCS#1 y SEC1.
+
+Para probar en local:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
+  -keyout servidor-clave.pem -out servidor.pem \
+  -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+En producción usa un certificado de una CA real y reinicia el proceso al
+renovarlo: Vaca no implementa ACME. También puedes poner Nginx o Caddy delante
+si prefieres que ellos gestionen los certificados.
+
+El cliente acepta `https://` y valida contra las raíces de Mozilla. Para una CA
+interna:
+
+```bash
+VACA_CA=/ruta/ca.pem vaca cliente.vaca
+```
+
+`VACA_CA` solo **añade** una raíz; no desactiva la validación.
 
 ## Seguridad para un laboratorio
 
@@ -396,8 +415,9 @@ entorno y a la red según el usuario que lo ejecute.
 
 - Ejecuta el servidor en un contenedor o usuario sin privilegios.
 - Limita las conexiones con el cuarto argumento de `http.servidor`.
-- No confíes en `Content-Length`: el servidor lee el cuerpo indicado sin un
-  límite propio. Pon un proxy con límite de tamaño.
+- El servidor limita cabeceras a 64 KiB y cuerpo a 16 MiB, y rechaza
+  `Transfer-Encoding`. Aun así, valida los tamaños en tu manejador si esperas
+  cargas grandes.
 - `json.parse` rechaza JSON inválido y anidamiento excesivo, pero no valida
   esquemas; valida los campos a mano.
 - No hay autenticación ni rate limiting nativos. Impleméntalos en el

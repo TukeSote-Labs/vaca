@@ -7,7 +7,8 @@ description: "Qué es Vaca, cómo instalarlo y cómo escribir tu primer programa
 # Documentación de Vaca
 
 Vaca es un lenguaje de programación **en español, con llaves y pensado para
-servidores**. Su motor está escrito en Rust y no usa dependencias externas: el
+servidores**. Su motor está escrito en Rust: usa la biblioteca estándar y
+`rustls` para TLS, sin frameworks: el
 binario, la biblioteca estándar y el servidor HTTP viajan juntos.
 
 Esta documentación cubre el lenguaje, la biblioteca estándar, el modelo de
@@ -23,7 +24,7 @@ concurrencia, los ejemplos de uso, las herramientas y una referencia rápida.
 | Motor | Compilador a bytecode y VM de pila en Rust |
 | Concurrencia | Hilos del sistema, `async`/`esperar`, contadores atómicos |
 | Biblioteca | JSON, matemáticas, tiempo, sistema, archivos, texto, CSV/DataFrames, HTTP y concurrencia |
-| Dependencias | Cero (solo Rust estándar) |
+| Dependencias | Rust estándar + `rustls` (TLS) |
 | Licencia | MIT |
 
 ## Instalación
@@ -135,8 +136,8 @@ Vaca está en la versión **0.1.0**. El lenguaje, la biblioteca estándar, la
 concurrencia real y el servidor HTTP están implementados. Las funciones se
 compilan a bytecode y se ejecutan en una VM de pila, con el intérprete de árbol
 como respaldo para `intentar`, cierres anidados e `importar`. Todavía no hay
-comprobación estática de tipos, recolector de basura, formateador, gestor de
-paquetes ni TLS.
+comprobación estática de tipos, recolector de basura, formateador ni gestor de
+paquetes.
 
 Consulta la [referencia rápida](/docs/referencia/#limitaciones) para ver la
 lista completa de límites antes de llevar Vaca a producción.

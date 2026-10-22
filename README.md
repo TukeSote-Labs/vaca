@@ -2,20 +2,21 @@
 
 **Vaca** es un lenguaje de programación completo, con sintaxis en español y
 pensado para servidores, backends y procesamiento de datos. Está implementado
-en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
+en Rust con la biblioteca estándar y `rustls` para TLS, sin frameworks ni
+runtime externo.
 
 - Sintaxis con **llaves** `{ }`: no depende de la indentación.
 - Tipos dinámicos con anotaciones opcionales.
 - Funciones, cierres (closures), callbacks y recursividad.
 - Listas, diccionarios y POO con clases, herencia y `este`.
-- Módulos nativos para **HTTP**, **JSON**, **DataFrames/CSV**, archivos,
+- Módulos nativos para **HTTP/HTTPS (TLS)**, **JSON**, **DataFrames/CSV**, archivos,
   matemáticas, texto, tiempo, sistema y **concurrencia**.
 - **Concurrencia real con hilos**: `async fn`, `esperar`, contadores atómicos y
   servidor HTTP que atiende conexiones en paralelo.
 - CLI con ejecución de archivos, REPL, volcado de tokens y AST.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 75 pruebas automatizadas y ejemplos ejecutables.
+- 79 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** compilador a bytecode con VM de pila para funciones, con
 > intérprete de árbol como respaldo para las construcciones que la VM aún no
@@ -41,7 +42,8 @@ en Rust usando únicamente la biblioteca estándar, sin dependencias externas.
 ### Requisitos
 
 - Rust estable (`rustc` y `cargo`).
-- No hay dependencias externas: el proyecto compila sin conexión a red.
+- El motor solo usa la biblioteca estándar. TLS añade las crates `rustls`,
+  `rustls-pemfile`, `webpki-roots` y `ring`, que se descargan al compilar.
 
 ### Compilar
 
@@ -789,10 +791,50 @@ respuesta = http.peticion("http://api.local/items", "POST", "{\"x\":1}", {
 
 Firma: `http.peticion(url, metodo = "GET", cuerpo = "", cabeceras = {})`.
 Devuelve un diccionario con `estado`, `razon`, `cabeceras` y `cuerpo`.
-Solo se admite `http://`; para HTTPS usa un proxy inverso con TLS.
+Se admiten `http://` y `https://`. En HTTPS el certificado se valida contra las
+raíces de Mozilla; define `VACA_CA` para añadir una CA propia.
 
 También hay `http.codificar_url`, `http.decodificar_url` y
 `http.estado(codigo)`.
+
+#### Servidor HTTPS (TLS)
+
+```vaca
+http.servidor_tls("0.0.0.0", 8443, "certificados/servidor.pem", "certificados/servidor-clave.pem", manejador)
+```
+
+Firmas: `http.servidor_tls(puerto, cert, clave, manejador)`,
+`(puerto, cert, clave, manejador, limite)`,
+`(host, puerto, cert, clave, manejador)` y
+`(host, puerto, cert, clave, manejador, limite)`. Las rutas relativas se
+resuelven contra el directorio del script.
+
+- TLS 1.2 y 1.3 mediante `rustls`; no se aceptan TLS 1.0/1.1 ni cifrados
+  obsoletos.
+- ALPN `http/1.1` y `Strict-Transport-Security: max-age=31536000` en las
+  respuestas.
+- El certificado puede incluir la cadena completa en PEM; la clave admite
+  PKCS#8, PKCS#1 y SEC1.
+
+Para probar en local:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
+  -keyout servidor-clave.pem -out servidor.pem \
+  -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+En producción usa un certificado de una CA pública o interna y reinicia el
+proceso al renovarlo. Vaca no implementa ACME: usa `certbot`, otro cliente ACME
+o un proxy delante.
+
+Límites de seguridad del servidor HTTP: cabeceras de hasta 64 KiB, cuerpo de
+hasta 16 MiB, timeouts de 30 s, rechazo de `Transfer-Encoding` no soportado y
+cierre ordenado de TLS. Para exponerlo a Internet, limita las conexiones:
+
+```vaca
+http.servidor_tls("0.0.0.0", 8443, "servidor.pem", "servidor-clave.pem", manejador, 1000)
+```
 
 #### Laboratorio de estrés
 
@@ -875,12 +917,15 @@ src/
   parser.rs         Parser recursivo descendente
   error.rs          Errores léxicos, sintácticos y de ejecución
   value.rs          Valores en tiempo de ejecución
-  interprete.rs     Intérprete, entornos y métodos nativos
+  bytecode.rs       Instrucciones y unidades de código de la VM
+  compilador.rs     AST → bytecode
+  rapido.rs         Hasher FNV-1a interno
+  interprete.rs     Intérprete de árbol, VM y métodos nativos
   modulos/
     mod.rs          Registro de módulos
     json.rs         JSON
     mate.rs         Matemáticas
-    http.rs         Servidor y cliente HTTP
+    http.rs         Servidor y cliente HTTP/HTTPS (rustls)
     datos.rs        DataFrames y CSV
     archivo.rs      Archivos
     cadenas.rs      Texto
@@ -888,7 +933,7 @@ src/
     sistema.rs      Entorno y proceso
     concurrencia.rs Tareas, contadores atómicos e hilos
 ejemplos/           Programas de ejemplo
-tests/              Pruebas de lenguaje e integración
+tests/              Pruebas de lenguaje, VM, integración y TLS
 scripts/            Prueba de humo de los servidores HTTP
 packaging/          Empaquetado, Docker y systemd
   empaquetar.sh     Genera el tarball distribuible
@@ -934,7 +979,7 @@ landing/            Landing del lenguaje (Astro + Bun)
   suficiente para un laboratorio de estrés o una API moderada, pero no es un
   event loop: miles de tareas simultáneas consumen memoria. Para cargas
   masivas, usa `http.servidor(..., limite)` o reparte la carga entre varias
-  instancias. No se usan `tokio` ni dependencias externas.
+  instancias. No se usan `tokio` ni frameworks.
 - **Sin recolector de basura.** Listas, diccionarios e instancias usan
   `Arc`/`Mutex`; los ciclos de referencias no se liberan automáticamente.
 - **No esperes una tarea desde dentro de sí misma.** `esperar` sobre la tarea
@@ -943,8 +988,9 @@ landing/            Landing del lenguaje (Astro + Bun)
 - **Anotaciones de tipo informativas.** `x: Entero = 0` se acepta, pero el
   intérprete no realiza comprobación estática de tipos; el tipado es dinámico.
   El análisis semántico actual solo comprueba variables locales no usadas.
-- **HTTP sin TLS.** El cliente solo habla `http://`. El servidor tampoco
-  termina TLS.
+- **Sin ACME ni recarga de certificados.** TLS está implementado con rustls,
+  pero los certificados se renuevan fuera de Vaca (certbot u otro cliente ACME)
+  y hay que reiniciar el proceso para cargar el nuevo.
 - **Sin `super`.** La herencia funciona por búsqueda dinámica de métodos, pero
   no hay una forma explícita de llamar al método del padre.
 - **Límite de recursión.** El intérprete embebido limita la profundidad a 64

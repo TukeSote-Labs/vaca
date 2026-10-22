@@ -230,7 +230,7 @@ declaran funciones o clases anidadas y las funciones `async`.
 | `'romper' fuera de un bucle` | `romper` mal ubicado |
 | `el constructor 'iniciar' no puede ser async` | `iniciar` declarado `async` |
 | `no se pudo iniciar el servidor en '...'` | Puerto ocupado o permisos |
-| `https no está soportado sin TLS` | Usa `http://` o un proxy |
+| `invalid peer certificate` | Certificado no confiable o nombre incorrecto |
 
 Los errores léxicos y sintácticos indican línea y columna. Los de ejecución no
 incluyen la posición: usa `imprimir` para rastrear el estado.
@@ -258,7 +258,7 @@ No imprimas secretos ni cuerpos completos en producción. Para carga, usa
 - La VM cubre funciones y bucles; `intentar`/`atrapar`, cierres creados dentro de una función, funciones o clases anidadas e `importar` usan el intérprete de árbol.
 - No hay comprobación estática de tipos ni recolector de basura.
 - No hay formateador (`vaca fmt`), gestor de paquetes, LSP ni `vaca test`.
-- No hay TLS nativo.
+- Sin ACME: los certificados se renuevan fuera de Vaca.
 - No existe `super` para llamar al método del padre.
 - La concurrencia usa hilos del sistema, no un event loop.
 - Los ciclos de referencias con `Arc` no se liberan.

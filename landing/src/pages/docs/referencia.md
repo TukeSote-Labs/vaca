@@ -101,7 +101,7 @@ verdadero.
 | `cadenas` | `unir`, `mayusculas`, `minusculas`, `recortar`, `reemplazar`, `dividir`, `contiene`, `empieza_con`, `termina_con`, `repetir`, `rellenar_izquierda`, `rellenar_derecha`, `longitud` |
 | `datos` | `leer_csv`, `guardar_csv`, `dimensiones`, `nombres`, `columna`, `filtrar`, `ordenar`, `mutar`, `agrupar_resumir`, `ver`, `a_json`, `desde_json`, `unir`, `seleccionar`, `eliminar_columna` |
 | `concurrencia` | `tarea`, `paralelo`, `esperar_todas`, `contador`, `incrementar`, `valor`, `reiniciar`, `dormir`, `hilos` |
-| `http` | `servidor`, `peticion`, `codificar_url`, `decodificar_url`, `estado` |
+| `http` | `servidor`, `servidor_tls`, `peticion`, `codificar_url`, `decodificar_url`, `estado` |
 
 ## Formas de importar
 
@@ -168,7 +168,7 @@ http.servidor(8080, fn(peticion) {
 | `división entre cero` | Valida el divisor |
 | `desbordamiento de pila` | Añade un caso base |
 | `'romper' fuera de un bucle` | Mueve `romper` dentro del bucle |
-| `https no está soportado sin TLS` | Usa `http://` o un proxy inverso |
+| `invalid peer certificate` | Revisa la cadena, el nombre del host o `VACA_CA` |
 | `el constructor 'iniciar' no puede ser async` | Quita `async` de `iniciar` |
 
 ## Limitaciones
@@ -177,7 +177,7 @@ http.servidor(8080, fn(peticion) {
 - **Tipado dinámico**: las anotaciones son informativas.
 - **Sin recolector de basura**: los ciclos de `Arc` no se liberan.
 - **Sin `super`**: no se puede llamar explícitamente al método del padre.
-- **HTTP sin TLS**: usa un proxy inverso.
+- **Sin ACME**: los certificados se renuevan fuera de Vaca y hay que reiniciar el proceso.
 - **Concurrencia con hilos**: 8 MiB de pila por tarea/conexión, sin event loop.
 - **Sin canales** entre tareas.
 - **No esperes una tarea desde dentro de sí misma**: se bloquea.
