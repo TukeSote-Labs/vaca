@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/Docs.astro
 title: "Módulos nativos"
-description: "Referencia de la biblioteca estándar de Vaca: json, mate, tiempo, sistema, archivo, cadenas, datos y concurrencia."
+description: "Referencia de la biblioteca estándar de Vaca: json, bd, mate, tiempo, sistema, archivo, cadenas, datos y concurrencia."
 ---
 
 # Módulos nativos
@@ -19,6 +19,7 @@ importar archivo
 | Módulo | Alias | Contenido |
 | :--- | :--- | :--- |
 | `json` | — | Parseo, serialización y validación |
+| `bd` | `db`, `base_datos` | Conexiones SQLite |
 | `mate` | `matematica`, `matemática` | Matemáticas y azar |
 | `tiempo` | — | Reloj, fechas y esperas |
 | `sistema` | — | Entorno, argumentos y salida |
@@ -51,6 +52,143 @@ valido = json.valido(texto)                   # verdadero
 anidamiento supera los 300 niveles. `json.stringify` serializa listas,
 diccionarios e instancias (por sus campos) y limita la profundidad a 128; las
 funciones, clases y tareas no son serializables.
+
+## `bd`
+
+Conexiones **SQLite** con consultas parametrizadas. Los valores nunca se
+interpolan en el SQL: se envían como parámetros enlazados.
+
+```vaca
+importar bd
+
+db = bd.conectar("sqlite:datos.db")
+memoria = bd.conectar("sqlite::memory:")
+```
+
+### DSN
+
+| DSN | Descripción |
+| :--- | :--- |
+| `sqlite:datos.db` | Archivo SQLite (relativo al programa) |
+| `sqlite:ruta/absoluta.db` | Archivo SQLite |
+| `sqlite::memory:` | Base SQLite en memoria |
+
+`bd.sqlite(ruta)` es un atajo de `bd.conectar("sqlite:" + ruta)`.
+
+### Modo de apertura
+
+Por defecto, si el archivo no existe, SQLite **lo crea vacío**. Puedes cambiar
+ese comportamiento:
+
+```vaca
+# Falla si el archivo no existe (no lo crea).
+db = bd.conectar("sqlite:datos.db", {"crear": falso})
+
+# Solo lectura: falla si no existe y rechaza escrituras.
+db = bd.abrir_solo_lectura("datos.db")
+```
+
+| Opción | Defecto | Efecto |
+| :--- | :--- | :--- |
+| `crear` | `verdadero` | Si es `falso`, falla cuando el archivo no existe |
+| `solo_lectura` | `falso` | Abre en solo lectura; implica `crear: falso` |
+| `tiempo_espera` | `5000` | Milisegundos de espera ante un bloqueo |
+
+```vaca
+db = bd.conectar("sqlite:datos.db", {
+    "solo_lectura": verdadero,
+    "tiempo_espera": 2000
+})
+```
+
+- La carpeta padre debe existir; Vaca no crea directorios.
+- `sqlite::memory:` no admite `solo_lectura`.
+- Puedes comprobar el modo con `db.solo_lectura()`.
+
+### Crear y consultar
+
+```vaca
+importar bd
+
+db = bd.conectar("sqlite:tienda.db")
+
+db.ejecutar("CREATE TABLE IF NOT EXISTS productos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT, precio REAL)")
+
+resultado = db.ejecutar(
+    "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
+    ["Café", 8.5]
+)
+imprimir(resultado.filas)       # 1
+imprimir(resultado.ultimo_id)   # id generado
+
+filas = db.consultar("SELECT id, nombre, precio FROM productos WHERE precio > ?", [5])
+para fila en filas {
+    imprimir(a"{fila.nombre}: {fila.precio}")
+}
+
+uno = db.una("SELECT * FROM productos ORDER BY precio DESC")
+nombre = db.valor("SELECT nombre FROM productos WHERE id = ?", [1])
+```
+
+### Métodos
+
+| Método | Devuelve |
+| :--- | :--- |
+| `consultar(sql, params = [])` | Lista de diccionarios (una entrada por fila) |
+| `ejecutar(sql, params = [])` | `{filas, ultimo_id}` |
+| `una(sql, params = [])` | Primer diccionario o `nulo` |
+| `valor(sql, params = [])` | Primera columna de la primera fila o `nulo` |
+| `lote(sql)` | Ejecuta varias sentencias sin parámetros |
+| `iniciar()` / `confirmar()` / `revertir()` | Transacciones |
+| `cerrar()` | Cierra la conexión |
+| `abierta()` | Lógico |
+| `solo_lectura()` | Lógico |
+| `motor()` | `sqlite` |
+| `ruta()` | Archivo o `:memory:` |
+| `version()` | Versión de SQLite |
+
+`db.tipo` devuelve `conexion`.
+
+### Transacciones
+
+```vaca
+db.iniciar()
+intentar {
+    db.ejecutar("INSERT INTO productos (nombre, precio) VALUES (?, ?)", ["Té", 4.0])
+    db.ejecutar("UPDATE productos SET precio = ? WHERE nombre = ?", [4.5, "Té"])
+    db.confirmar()
+} atrapar error {
+    db.revertir()
+    lanzar error
+}
+```
+
+### Tipos
+
+| SQLite | Vaca |
+| :--- | :--- |
+| `NULL` | `nulo` |
+| `INTEGER`, `INT` | `Entero` |
+| `REAL`, `DOUBLE`, `FLOAT` | `Decimal` |
+| `TEXT`, `VARCHAR`, `CHAR`, `CLOB` | `Texto` |
+| `BLOB` | `Texto` (UTF-8 con reemplazo) |
+| `BOOLEAN` (guardado como entero) | `0` / `1` |
+
+SQLite no tiene fecha nativa: guarda fechas como `TEXT` ISO o como epoch y
+conviértelas en Vaca. Las columnas JSON también son `TEXT`; usa `json.parse`.
+
+### Notas
+
+- Cada `conectar` abre **una** conexión. Los métodos se serializan con un
+  mutex; para muchas peticiones concurrentes, abre una conexión por tarea.
+- `ultimo_id` solo se devuelve tras un `INSERT`.
+- `ejecutar` no devuelve filas: para `INSERT ... RETURNING` usa `consultar`.
+- Al abrir en solo lectura, cualquier `INSERT`, `UPDATE` o `DELETE` falla.
+- Los parámetros admiten enteros, decimales, textos, lógicos y `nulo`.
+- Si un `SELECT` repite el mismo nombre de columna, usa alias (`AS`) para no perder valores en el diccionario.
+- No hay agrupación de conexiones ni migraciones automáticas.
+- Vaca solo incluye SQLite de forma nativa; para otro motor necesitas otro
+  binario o un módulo externo.
 
 ## `mate`
 

@@ -138,9 +138,9 @@ Vaca está en la versión **0.1.0**. El lenguaje, la biblioteca estándar, la
 concurrencia real y el servidor HTTP están implementados. Las funciones se
 compilan a bytecode y se ejecutan en una VM de pila, con el intérprete de árbol
 como respaldo para `intentar`, cierres anidados e `importar`. También hay
-módulos (`vaca.mod` + `iniciar.vaca`), gestor de paquetes y bundles de
-producción verificados. Todavía no hay comprobación estática de tipos,
-recolector de basura ni formateador.
+módulos (`vaca.mod` + `iniciar.vaca`), gestor de paquetes, bundles de
+producción verificados y conexiones SQLite. Todavía no hay
+comprobación estática de tipos, recolector de basura ni formateador.
 
 Consulta la [referencia rápida](/docs/referencia/#limitaciones) para ver la
 lista completa de límites antes de llevar Vaca a producción.

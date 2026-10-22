@@ -88,9 +88,10 @@ export const navegacion: Grupo[] = [
       {
         titulo: 'Módulos nativos',
         href: '/docs/modulos/',
-        descripcion: 'JSON, matemáticas, tiempo, sistema, archivos, datos, HTTP y más.',
+        descripcion: 'JSON, SQLite, matemáticas, tiempo, sistema, archivos, datos, HTTP y más.',
         secciones: [
           s('json', 'json'),
+          s('bd', 'bd'),
           s('mate', 'mate'),
           s('tiempo', 'tiempo'),
           s('sistema', 'sistema'),

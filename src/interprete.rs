@@ -1858,6 +1858,13 @@ impl Interprete {
                     modulo.nombre, nombre
                 ))
             }),
+            Value::Nativo(objeto) => match nombre {
+                "tipo" => Ok(Value::Texto(objeto.tipo.clone())),
+                _ => Err(Error::ejecucion(format!(
+                    "el objeto '{}' no tiene el miembro '{}'",
+                    objeto.tipo, nombre
+                ))),
+            },
             otro @ (Value::Lista(_)
             | Value::Texto(_)
             | Value::Entero(_)
@@ -1923,6 +1930,7 @@ impl Interprete {
                 let (receptor, nombre) = (*metodo).clone();
                 self.despachar_metodo_nativo(receptor, &nombre, args)
             }
+            Value::Nativo(objeto) => (objeto.despachar)(self, &objeto, nombre, args),
             otro => self.despachar_metodo_nativo(otro, nombre, args),
         }
     }

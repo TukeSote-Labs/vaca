@@ -1,0 +1,21 @@
+importar bd
+
+# SQLite en memoria: no crea archivos.
+db = bd.conectar("sqlite::memory:")
+
+db.ejecutar("CREATE TABLE usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, saldo REAL)")
+db.ejecutar("INSERT INTO usuarios (nombre, saldo) VALUES (?, ?)", ["Ana", 125.5])
+db.ejecutar("INSERT INTO usuarios (nombre, saldo) VALUES (?, ?)", ["Luis", 80.0])
+
+imprimir(a"Motor: {db.motor()} {db.version()}")
+mayor = db.una("SELECT nombre FROM usuarios ORDER BY saldo DESC")
+imprimir(a"Mayor saldo: {mayor.nombre}")
+
+total = db.valor("SELECT SUM(saldo) FROM usuarios")
+imprimir(a"Total: {total}")
+
+para fila en db.consultar("SELECT nombre, saldo FROM usuarios ORDER BY nombre") {
+    imprimir(a"{fila.nombre}: {fila.saldo}")
+}
+
+db.cerrar()

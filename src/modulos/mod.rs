@@ -1,6 +1,7 @@
 //! Módulos nativos de Vaca.
 
 pub mod archivo;
+pub mod bd;
 pub mod cadenas;
 pub mod concurrencia;
 pub mod datos;
@@ -41,6 +42,7 @@ pub fn obtener_modulo(nombre: &str) -> Option<Value> {
         "http" => Some(http::modulo()),
         "cadenas" | "texto" => Some(cadenas::modulo()),
         "concurrencia" | "concurrente" => Some(concurrencia::modulo()),
+        "bd" | "db" | "base_datos" | "basedatos" => Some(bd::modulo()),
         _ => None,
     }
 }

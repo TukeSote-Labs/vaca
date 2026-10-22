@@ -32,6 +32,7 @@ cargo run -- ejemplos/<archivo>.vaca
 | `config.vaca` + `.env` | Carga de configuración con `sistema.cargar_env`, comentarios al final y comillas. |
 | `importar.vaca` + `util.vaca` | Importación de módulos escritos en Vaca. |
 | `datos.vaca` + `ventas.csv` | DataFrames, filtros, orden, mutación y agrupación. |
+| `bd.vaca` | SQLite: conexión, tabla, inserción parametrizada y consultas. |
 | `servidor.vaca` | Servidor HTTP básico con rutas y JSON. |
 | `servidor_api.vaca` | API JSON con validación, rate limiting y estado en memoria. |
 | `servidor_concurrente.vaca` | Servidor de estrés: conexiones en paralelo, métricas atómicas y eco JSON. |

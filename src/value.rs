@@ -1,5 +1,6 @@
 //! Valores en tiempo de ejecución.
 
+use std::any::Any;
 use std::cmp::Ordering;
 use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering as AtomicOrdering};
@@ -13,6 +14,38 @@ use crate::interprete::{Entorno, Interprete};
 use crate::rapido::MapaRapido;
 
 pub type NativaFn = fn(&mut Interprete, Vec<Value>) -> Result<Value, Error>;
+
+/// Despachador de métodos de un objeto nativo opaco (conexiones, etc.).
+pub type DespachadorNativo =
+    fn(&mut Interprete, &Arc<ObjetoNativo>, &str, Vec<Value>) -> Result<Value, Error>;
+
+/// Valor opaco creado por un módulo nativo.
+///
+/// El intérprete no conoce su funcionamiento: solo expone `tipo` como
+/// propiedad y delega los métodos en `despachar`. Así se pueden añadir
+/// conexiones, cursores u otros recursos sin tocar el lenguaje.
+pub struct ObjetoNativo {
+    pub tipo: String,
+    pub datos: Arc<dyn Any + Send + Sync>,
+    pub despachar: DespachadorNativo,
+}
+
+impl ObjetoNativo {
+    pub fn nuevo<T>(tipo: &str, datos: T, despachar: DespachadorNativo) -> Arc<ObjetoNativo>
+    where
+        T: Any + Send + Sync,
+    {
+        Arc::new(ObjetoNativo {
+            tipo: tipo.to_string(),
+            datos: Arc::new(datos),
+            despachar,
+        })
+    }
+
+    pub fn datos<T: Any>(&self) -> Option<&T> {
+        self.datos.downcast_ref::<T>()
+    }
+}
 
 /// Mapa de claves de texto usado por diccionarios, instancias y módulos.
 pub type MapaValores = MapaRapido<String, Value>;
@@ -113,6 +146,8 @@ pub enum Value {
     Tarea(Arc<Tarea>),
     /// Contador atómico seguro para múltiples hilos.
     Contador(Arc<AtomicI64>),
+    /// Recurso opaco de un módulo nativo (por ejemplo, una conexión SQL).
+    Nativo(Arc<ObjetoNativo>),
 }
 
 impl Value {
@@ -154,6 +189,7 @@ impl Value {
             Value::MetodoNativo(_) => "Funcion",
             Value::Tarea(_) => "Tarea",
             Value::Contador(_) => "Contador",
+            Value::Nativo(_) => "Objeto",
         }
     }
 
@@ -211,6 +247,7 @@ impl Value {
             Value::MetodoNativo(_) => "<método nativo>".to_string(),
             Value::Tarea(_) => "<tarea>".to_string(),
             Value::Contador(c) => c.load(AtomicOrdering::SeqCst).to_string(),
+            Value::Nativo(objeto) => format!("<objeto {}>", objeto.tipo),
         }
     }
 
@@ -350,6 +387,7 @@ fn iguales_profundidad(a: &Value, b: &Value, profundidad: usize) -> bool {
         (Value::Modulo(x), Value::Modulo(y)) => Arc::ptr_eq(x, y),
         (Value::Tarea(x), Value::Tarea(y)) => Arc::ptr_eq(x, y),
         (Value::Contador(x), Value::Contador(y)) => Arc::ptr_eq(x, y),
+        (Value::Nativo(x), Value::Nativo(y)) => Arc::ptr_eq(x, y),
         _ => false,
     }
 }

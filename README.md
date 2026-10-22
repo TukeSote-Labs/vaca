@@ -9,7 +9,7 @@ runtime externo.
 - Tipos dinámicos con anotaciones opcionales.
 - Funciones, cierres (closures), callbacks y recursividad.
 - Listas, diccionarios y POO con clases, herencia y `este`.
-- Módulos nativos para **HTTP/HTTPS (TLS)**, **JSON**, **DataFrames/CSV**, archivos,
+- Módulos nativos para **HTTP/HTTPS (TLS)**, **JSON**, **SQLite**, **DataFrames/CSV**, archivos,
   matemáticas, texto, tiempo, sistema y **concurrencia**.
 - **Concurrencia real con hilos**: `async fn`, `esperar`, contadores atómicos y
   servidor HTTP que atiende conexiones en paralelo.
@@ -20,7 +20,7 @@ runtime externo.
   autocontenido y verificado con SHA-256.
 - Extensión de Zed en `editor/` con gramática Tree-sitter propia.
 - Kit de empaquetado en `packaging/`: tarball, Docker, systemd y binario estático.
-- 100 pruebas automatizadas y ejemplos ejecutables.
+- 108 pruebas automatizadas y ejemplos ejecutables.
 
 > **Estado:** compilador a bytecode con VM de pila para funciones, con
 > intérprete de árbol como respaldo para las construcciones que la VM aún no
@@ -46,8 +46,9 @@ runtime externo.
 ### Requisitos
 
 - Rust estable (`rustc` y `cargo`).
-- El motor solo usa la biblioteca estándar. TLS añade las crates `rustls`,
-  `rustls-pemfile`, `webpki-roots` y `ring`, que se descargan al compilar.
+- Un compilador de C para compilar SQLite embebido (`cc`, `gcc` o `clang`).
+- TLS añade `rustls` y sus raíces; SQLite añade `rusqlite` y compila SQLite
+  embebido. Las crates se descargan al compilar.
 
 ### Compilar
 
@@ -202,6 +203,7 @@ vaca mi-api.vaca
 ./target/release/vaca ejemplos/config.vaca
 ./target/release/vaca ejemplos/importar.vaca
 ./target/release/vaca ejemplos/datos.vaca
+./target/release/vaca ejemplos/bd.vaca
 ```
 
 Consulta [`ejemplos/README.md`](ejemplos/README.md) para ver el índice completo,
@@ -738,6 +740,39 @@ bonito = json.stringify(valor, verdadero)
 valido = json.valido("{mal")
 ```
 
+### `bd`
+
+Conexiones a SQLite con parámetros enlazados:
+
+```vaca
+importar bd
+
+db = bd.conectar("sqlite:tienda.db")
+db.ejecutar("CREATE TABLE IF NOT EXISTS productos (id INTEGER PRIMARY KEY, nombre TEXT, precio REAL)")
+db.ejecutar("INSERT INTO productos (nombre, precio) VALUES (?, ?)", ["Café", 8.5])
+
+para fila en db.consultar("SELECT nombre, precio FROM productos WHERE precio > ?", [5]) {
+    imprimir(a"{fila.nombre}: {fila.precio}")
+}
+```
+
+Métodos de la conexión: `consultar`, `ejecutar`, `una`, `valor`, `lote`,
+`iniciar`, `confirmar`, `revertir`, `cerrar`, `abierta`, `solo_lectura`, `motor`,
+`ruta` y `version`. SQLite se compila embebido en el binario.
+
+Por defecto, si el archivo no existe, SQLite lo crea vacío. Para evitarlo:
+
+```vaca
+# Falla si no existe; no lo crea.
+db = bd.conectar("sqlite:datos.db", {"crear": falso})
+
+# Solo lectura: falla si no existe y rechaza escrituras.
+db = bd.abrir_solo_lectura("datos.db")
+```
+
+Opciones: `crear` (verdadero por defecto), `solo_lectura` y `tiempo_espera`
+(milisegundos). La carpeta padre debe existir.
+
 ### `mate`
 
 `PI`, `E`, `promedio`, `raiz`, `potencia`, `redondear`, `piso`, `techo`,
@@ -1094,6 +1129,7 @@ src/
     tiempo.rs       Reloj y fechas
     sistema.rs      Entorno y proceso
     concurrencia.rs Tareas, contadores atómicos e hilos
+    bd.rs            Conexiones SQLite
 ejemplos/           Programas de ejemplo
 tests/              Pruebas de lenguaje, VM, TLS, módulos y paquetes
 scripts/            Prueba de humo de los servidores HTTP
@@ -1142,6 +1178,9 @@ landing/            Landing del lenguaje (Astro + Bun)
   event loop: miles de tareas simultáneas consumen memoria. Para cargas
   masivas, usa `http.servidor(..., limite)` o reparte la carga entre varias
   instancias. No se usan `tokio` ni frameworks.
+- **Bases de datos: solo SQLite nativo.** Cada `bd.conectar` abre una
+  conexión y serializa sus métodos; no hay agrupación de conexiones ni otros
+  motores (PostgreSQL, MySQL) en el binario.
 - **Sin recolector de basura.** Listas, diccionarios e instancias usan
   `Arc`/`Mutex`; los ciclos de referencias no se liberan automáticamente.
 - **No esperes una tarea desde dentro de sí misma.** `esperar` sobre la tarea

@@ -22,3 +22,4 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rustls-pemfile = "2"
 webpki-roots = "0.26"
 ring = "0.17"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
